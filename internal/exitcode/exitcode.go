@@ -18,14 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package exitcode
 
-import (
-	"os"
-
-	"github.com/jcouture/ghostscan/cmd"
+const (
+	Success        = 0
+	ExecutionError = 2
 )
-
-func main() {
-	os.Exit(cmd.Execute())
-}

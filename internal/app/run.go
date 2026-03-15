@@ -18,14 +18,40 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package app
 
 import (
+	"context"
+	"fmt"
 	"os"
-
-	"github.com/jcouture/ghostscan/cmd"
+	"path/filepath"
 )
 
-func main() {
-	os.Exit(cmd.Execute())
+type Options struct {
+	Path string
+}
+
+func Run(ctx context.Context, opts Options) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("context canceled: %w", ctx.Err())
+	default:
+	}
+
+	path := opts.Path
+	if path == "" {
+		path = "."
+	}
+
+	cleanPath := filepath.Clean(path)
+	absolutePath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("resolve absolute path for %q: %w", path, err)
+	}
+
+	if _, err := os.Stat(absolutePath); err != nil {
+		return fmt.Errorf("stat path %q: %w", absolutePath, err)
+	}
+
+	return nil
 }
