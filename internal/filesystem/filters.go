@@ -18,41 +18,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package app
+package filesystem
 
-import (
-	"context"
-	"fmt"
-	"io"
-
-	"github.com/jcouture/ghostscan/internal/filesystem"
-)
-
-type Options struct {
-	Path   string
-	Stdout io.Writer
+var excludedDirectories = map[string]struct{}{
+	".git":         {},
+	"node_modules": {},
+	"vendor":       {},
+	"dist":         {},
+	"build":        {},
+	"target":       {},
+	"out":          {},
+	"coverage":     {},
 }
 
-func Run(ctx context.Context, opts Options) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("context canceled: %w", ctx.Err())
-	default:
-	}
-
-	path := opts.Path
-	if path == "" {
-		path = "."
-	}
-
-	files, err := filesystem.Discover(path)
-	if err != nil {
-		return fmt.Errorf("discover files from %q: %w", path, err)
-	}
-
-	for _, f := range files {
-		fmt.Fprintln(opts.Stdout, f)
-	}
-
-	return nil
+func isExcludedDirectory(name string) bool {
+	_, excluded := excludedDirectories[name]
+	return excluded
 }

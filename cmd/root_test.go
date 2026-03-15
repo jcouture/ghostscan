@@ -50,7 +50,7 @@ func TestExecute(t *testing.T) {
 			name:     "invalid path",
 			args:     []string{missingPath},
 			wantCode: exitcode.ExecutionError,
-			wantErr:  "stat path",
+			wantErr:  "discover files from",
 		},
 		{
 			name:     "too many args",
@@ -70,10 +70,6 @@ func TestExecute(t *testing.T) {
 			code := execute(context.Background(), tt.args, &stdout, &stderr)
 			if code != tt.wantCode {
 				t.Fatalf("execute() code = %d, want %d", code, tt.wantCode)
-			}
-
-			if stdout.Len() != 0 {
-				t.Fatalf("stdout = %q, want empty output", stdout.String())
 			}
 
 			if tt.wantErr == "" {

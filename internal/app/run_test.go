@@ -22,6 +22,7 @@ package app
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,7 +34,11 @@ func TestRun(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "single.txt")
 	missingPath := filepath.Join(tempDir, "missing")
+	if err := os.WriteFile(filePath, []byte("content"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -42,16 +47,20 @@ func TestRun(t *testing.T) {
 	}{
 		{
 			name:    "valid directory path",
-			options: Options{Path: tempDir},
+			options: Options{Path: tempDir, Stdout: io.Discard},
+		},
+		{
+			name:    "valid single file path",
+			options: Options{Path: filePath, Stdout: io.Discard},
 		},
 		{
 			name:    "default current directory",
-			options: Options{},
+			options: Options{Stdout: io.Discard},
 		},
 		{
 			name:    "invalid path",
-			options: Options{Path: missingPath},
-			wantErr: "stat path",
+			options: Options{Path: missingPath, Stdout: io.Discard},
+			wantErr: "discover files from",
 		},
 	}
 
@@ -97,7 +106,7 @@ func TestRunUnreadablePath(t *testing.T) {
 	})
 
 	targetPath := filepath.Join(unreadableDir, "child")
-	err := Run(context.Background(), Options{Path: targetPath})
+	err := Run(context.Background(), Options{Path: targetPath, Stdout: io.Discard})
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}

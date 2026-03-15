@@ -18,41 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package app
+package filesystem
 
-import (
-	"context"
-	"fmt"
-	"io"
+import "io/fs"
 
-	"github.com/jcouture/ghostscan/internal/filesystem"
-)
-
-type Options struct {
-	Path   string
-	Stdout io.Writer
+func isSymlink(mode fs.FileMode) bool {
+	return mode&fs.ModeSymlink != 0
 }
 
-func Run(ctx context.Context, opts Options) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("context canceled: %w", ctx.Err())
-	default:
-	}
-
-	path := opts.Path
-	if path == "" {
-		path = "."
-	}
-
-	files, err := filesystem.Discover(path)
-	if err != nil {
-		return fmt.Errorf("discover files from %q: %w", path, err)
-	}
-
-	for _, f := range files {
-		fmt.Fprintln(opts.Stdout, f)
-	}
-
-	return nil
+func isRegularFileCandidate(mode fs.FileMode) bool {
+	return mode.IsRegular()
 }

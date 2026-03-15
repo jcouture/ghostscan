@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/jcouture/ghostscan/internal/app"
 	"github.com/jcouture/ghostscan/internal/exitcode"
@@ -32,7 +33,7 @@ import (
 )
 
 func Execute() int {
-	return execute(context.Background(), nil, io.Discard, io.Discard)
+	return execute(context.Background(), nil, os.Stdout, os.Stderr)
 }
 
 func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -60,7 +61,7 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 func newRootCommand(ctx context.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "ghostscan [path]",
-		Short:         "Validate a filesystem path.",
+		Short:         "Discover candidate files under a filesystem path.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.MaximumNArgs(1),
@@ -70,7 +71,7 @@ func newRootCommand(ctx context.Context) *cobra.Command {
 				path = args[0]
 			}
 
-			if err := app.Run(ctx, app.Options{Path: path}); err != nil {
+			if err := app.Run(ctx, app.Options{Path: path, Stdout: cmd.OutOrStdout()}); err != nil {
 				return &runError{
 					code: exitcode.ExecutionError,
 					err:  err,
