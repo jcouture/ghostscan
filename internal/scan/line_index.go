@@ -18,47 +18,43 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package app
+package scan
 
 import (
-	"context"
-	"fmt"
-	"io"
-
-	"github.com/jcouture/ghostscan/internal/filesystem"
-	"github.com/jcouture/ghostscan/internal/scan"
+	"sort"
+	"unicode/utf8"
 )
 
-type Options struct {
-	Path   string
-	Stdout io.Writer
+func buildLineStarts(content []byte) []int {
+	lineStarts := []int{0}
+	for i, b := range content {
+		if b == '\n' && i+1 <= len(content) {
+			lineStarts = append(lineStarts, i+1)
+		}
+	}
+
+	return lineStarts
 }
 
-func Run(ctx context.Context, opts Options) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("context canceled: %w", ctx.Err())
-	default:
+func positionForOffset(content []byte, lineStarts []int, offset int) (int, int) {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(content) {
+		offset = len(content)
 	}
 
-	path := opts.Path
-	if path == "" {
-		path = "."
+	lineIndex := max(sort.Search(len(lineStarts), func(i int) bool {
+		return lineStarts[i] > offset
+	})-1, 0)
+
+	lineStart := lineStarts[lineIndex]
+	column := 1
+	for i := lineStart; i < offset; {
+		_, width := utf8.DecodeRune(content[i:])
+		i += width
+		column++
 	}
 
-	files, err := filesystem.Discover(path)
-	if err != nil {
-		return fmt.Errorf("discover files from %q: %w", path, err)
-	}
-
-	engine := scan.NewEngine()
-	for _, f := range files {
-		if _, err := engine.ScanFile(ctx, f); err != nil {
-			return fmt.Errorf("scan discovered file %q: %w", f, err)
-		}
-
-		fmt.Fprintln(opts.Stdout, f)
-	}
-
-	return nil
+	return lineIndex + 1, column
 }

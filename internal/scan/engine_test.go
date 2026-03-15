@@ -18,47 +18,43 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package app
+package scan
 
 import (
 	"context"
-	"fmt"
-	"io"
-
-	"github.com/jcouture/ghostscan/internal/filesystem"
-	"github.com/jcouture/ghostscan/internal/scan"
+	"strings"
+	"testing"
 )
 
-type Options struct {
-	Path   string
-	Stdout io.Writer
+func TestEngineScanFile(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	got, err := engine.ScanFile(context.Background(), fixturePath("unicode", "multiline.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if got.Path == "" {
+		t.Fatal("Path = empty, want file path")
+	}
+
+	if len(got.Observations) == 0 {
+		t.Fatal("Observations = empty, want scanned runes")
+	}
 }
 
-func Run(ctx context.Context, opts Options) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("context canceled: %w", ctx.Err())
-	default:
+func TestEngineScanFileNilReceiver(t *testing.T) {
+	t.Parallel()
+
+	var engine *Engine
+	_, err := engine.ScanFile(context.Background(), fixturePath("clean", "ascii.txt"))
+	if err == nil {
+		t.Fatal("ScanFile() error = nil, want error")
 	}
 
-	path := opts.Path
-	if path == "" {
-		path = "."
+	if !strings.Contains(err.Error(), "scan engine is nil") {
+		t.Fatalf("ScanFile() error = %q, want nil engine error", err.Error())
 	}
-
-	files, err := filesystem.Discover(path)
-	if err != nil {
-		return fmt.Errorf("discover files from %q: %w", path, err)
-	}
-
-	engine := scan.NewEngine()
-	for _, f := range files {
-		if _, err := engine.ScanFile(ctx, f); err != nil {
-			return fmt.Errorf("scan discovered file %q: %w", f, err)
-		}
-
-		fmt.Fprintln(opts.Stdout, f)
-	}
-
-	return nil
 }

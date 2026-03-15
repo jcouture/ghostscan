@@ -61,7 +61,7 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 func newRootCommand(ctx context.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "ghostscan [path]",
-		Short:         "Discover candidate files under a filesystem path.",
+		Short:         "Discover and scan eligible files under a filesystem path.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.MaximumNArgs(1),

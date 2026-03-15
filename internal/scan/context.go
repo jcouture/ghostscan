@@ -18,47 +18,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package app
+package scan
 
-import (
-	"context"
-	"fmt"
-	"io"
-
-	"github.com/jcouture/ghostscan/internal/filesystem"
-	"github.com/jcouture/ghostscan/internal/scan"
-)
-
-type Options struct {
-	Path   string
-	Stdout io.Writer
+type Context struct {
+	Path         string
+	Content      []byte
+	Text         string
+	LineStarts   []int
+	Observations []Observation
+	InvalidUTF8  bool
 }
 
-func Run(ctx context.Context, opts Options) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("context canceled: %w", ctx.Err())
-	default:
-	}
-
-	path := opts.Path
-	if path == "" {
-		path = "."
-	}
-
-	files, err := filesystem.Discover(path)
-	if err != nil {
-		return fmt.Errorf("discover files from %q: %w", path, err)
-	}
-
-	engine := scan.NewEngine()
-	for _, f := range files {
-		if _, err := engine.ScanFile(ctx, f); err != nil {
-			return fmt.Errorf("scan discovered file %q: %w", f, err)
-		}
-
-		fmt.Fprintln(opts.Stdout, f)
-	}
-
-	return nil
+type Observation struct {
+	Rune       rune
+	ByteOffset int
+	Line       int
+	Column     int
+	Width      int
 }
