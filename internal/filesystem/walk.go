@@ -46,6 +46,15 @@ func Discover(root string) ([]string, error) {
 	}
 
 	if isRegularFileCandidate(info.Mode()) {
+		eligible, err := isEligibleFile(absoluteRoot, DefaultMaxFileSize)
+		if err != nil {
+			return nil, err
+		}
+
+		if !eligible {
+			return []string{}, nil
+		}
+
 		return []string{absoluteRoot}, nil
 	}
 
@@ -78,6 +87,15 @@ func Discover(root string) ([]string, error) {
 		}
 
 		if !isRegularFileCandidate(entry.Type()) {
+			return nil
+		}
+
+		eligible, err := isEligibleFile(path, DefaultMaxFileSize)
+		if err != nil {
+			return err
+		}
+
+		if !eligible {
 			return nil
 		}
 

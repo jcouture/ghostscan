@@ -83,6 +83,48 @@ func TestDiscoverSingleFileRoot(t *testing.T) {
 	}
 }
 
+func TestDiscoverSkipsIneligibleFiles(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+
+	textFixture := copyFixtureFile(t, testdataPath("text", "plain.txt"), filepath.Join(root, "plain.txt"))
+	copyFixtureFile(t, testdataPath("binary", "contains_nul.bin"), filepath.Join(root, "contains_nul.bin"))
+	copyFixtureFile(t, testdataPath("oversize", "too_large.txt"), filepath.Join(root, "too_large.txt"))
+	writeRepeatingFile(t, filepath.Join(root, "boundary.txt"), "a", DefaultMaxFileSize)
+
+	got, err := Discover(root)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	want := []string{
+		filepath.Join(root, "boundary.txt"),
+		textFixture,
+	}
+	slices.Sort(want)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Discover() = %v, want %v", got, want)
+	}
+}
+
+func TestDiscoverSingleFileRootSkipsIneligibleFile(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := copyFixtureFile(t, testdataPath("binary", "contains_nul.bin"), filepath.Join(root, "contains_nul.bin"))
+
+	got, err := Discover(path)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Fatalf("Discover() = %v, want no candidates", got)
+	}
+}
+
 func TestDiscoverInvalidPath(t *testing.T) {
 	t.Parallel()
 
@@ -139,5 +181,48 @@ func createSymlink(t *testing.T, target, path string) {
 
 	if err := os.Symlink(target, path); err != nil {
 		t.Fatalf("Symlink(%q, %q) error = %v", target, path, err)
+	}
+}
+
+func copyFixtureFile(t *testing.T, src, dst string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", src, err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q) error = %v", filepath.Dir(dst), err)
+	}
+
+	if err := os.WriteFile(dst, content, 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", dst, err)
+	}
+
+	return dst
+}
+
+func writeRepeatingFile(t *testing.T, path, pattern string, size int64) {
+	t.Helper()
+
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create(%q) error = %v", path, err)
+	}
+	defer file.Close()
+
+	remaining := size
+	for remaining > 0 {
+		writeSize := len(pattern)
+		if remaining < int64(writeSize) {
+			writeSize = int(remaining)
+		}
+
+		if _, err := file.WriteString(pattern[:writeSize]); err != nil {
+			t.Fatalf("WriteString(%q) error = %v", path, err)
+		}
+
+		remaining -= int64(writeSize)
 	}
 }
