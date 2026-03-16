@@ -121,7 +121,7 @@ func TestRunReportsInvisibleFindings(t *testing.T) {
 	t.Parallel()
 
 	var stdout bytes.Buffer
-	findings, err := Run(context.Background(), Options{
+	result, err := Run(context.Background(), Options{
 		Path:   filepath.Join("..", "..", "testdata", "invisible"),
 		Stdout: &stdout,
 	})
@@ -129,8 +129,8 @@ func TestRunReportsInvisibleFindings(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if len(findings) != 9 {
-		t.Fatalf("len(findings) = %d, want 9", len(findings))
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
 	}
 
 	output := stdout.String()
@@ -146,7 +146,7 @@ func TestRunReportsPrivateUseFindings(t *testing.T) {
 	t.Parallel()
 
 	var stdout bytes.Buffer
-	findings, err := Run(context.Background(), Options{
+	result, err := Run(context.Background(), Options{
 		Path:   filepath.Join("..", "..", "testdata", "privateuse"),
 		Stdout: &stdout,
 	})
@@ -154,8 +154,8 @@ func TestRunReportsPrivateUseFindings(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if len(findings) != 3 {
-		t.Fatalf("len(findings) = %d, want 3", len(findings))
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
 	}
 
 	output := stdout.String()
@@ -171,7 +171,7 @@ func TestRunReportsBidiFindings(t *testing.T) {
 	t.Parallel()
 
 	var stdout bytes.Buffer
-	findings, err := Run(context.Background(), Options{
+	result, err := Run(context.Background(), Options{
 		Path:   filepath.Join("..", "..", "testdata", "bidi"),
 		Stdout: &stdout,
 	})
@@ -179,8 +179,8 @@ func TestRunReportsBidiFindings(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if len(findings) != 9 {
-		t.Fatalf("len(findings) = %d, want 9", len(findings))
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
 	}
 
 	output := stdout.String()
@@ -199,7 +199,7 @@ func TestRunReportsPayloadFindings(t *testing.T) {
 	t.Parallel()
 
 	var stdout bytes.Buffer
-	findings, err := Run(context.Background(), Options{
+	result, err := Run(context.Background(), Options{
 		Path:   filepath.Join("..", "..", "testdata", "payload"),
 		Stdout: &stdout,
 	})
@@ -207,8 +207,8 @@ func TestRunReportsPayloadFindings(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if len(findings) != 158 {
-		t.Fatalf("len(findings) = %d, want 158", len(findings))
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
 	}
 
 	output := stdout.String()
@@ -220,5 +220,21 @@ func TestRunReportsPayloadFindings(t *testing.T) {
 	}
 	if !strings.Contains(output, "evidence: "+strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17)) {
 		t.Fatalf("stdout = %q, want visible payload evidence", output)
+	}
+}
+
+func TestRunResultHasFindingsFalseForCleanInput(t *testing.T) {
+	t.Parallel()
+
+	result, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "clean"),
+		Stdout: io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if result.HasFindings {
+		t.Fatal("Run() HasFindings = true, want false")
 	}
 }

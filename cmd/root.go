@@ -49,13 +49,13 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		path = args[0]
 	}
 
-	findings, err := app.Run(ctx, app.Options{Path: path, Stdout: stdout})
+	result, err := app.Run(ctx, app.Options{Path: path, Stdout: stdout})
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 		return exitcode.ExecutionError
 	}
 
-	if len(findings) > 0 {
+	if result.HasFindings {
 		return exitcode.FindingsDetected
 	}
 

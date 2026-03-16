@@ -37,7 +37,7 @@ func TestRunSortsAggregatedFindingsBeforeReporting(t *testing.T) {
 	copyTestFile(t, filepath.Join("..", "..", "testdata", "bidi", "all.txt"), filepath.Join(root, "a-first.txt"))
 
 	var stdout bytes.Buffer
-	findings, err := Run(context.Background(), Options{
+	result, err := Run(context.Background(), Options{
 		Path:   root,
 		Stdout: &stdout,
 	})
@@ -45,17 +45,8 @@ func TestRunSortsAggregatedFindingsBeforeReporting(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if len(findings) < 2 {
-		t.Fatalf("len(findings) = %d, want at least 2", len(findings))
-	}
-
-	firstPath := findings[0].Path
-	lastPath := findings[len(findings)-1].Path
-	if filepath.Base(firstPath) != "a-first.txt" {
-		t.Fatalf("findings[0].Path = %q, want first sorted file", firstPath)
-	}
-	if filepath.Base(lastPath) != "z-last.txt" {
-		t.Fatalf("findings[last].Path = %q, want last sorted file", lastPath)
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
 	}
 
 	output := stdout.String()
