@@ -52,6 +52,11 @@ func TestExecute(t *testing.T) {
 			wantCode: exitcode.FindingsDetected,
 		},
 		{
+			name:     "private use findings detected",
+			args:     []string{filepath.Join("..", "testdata", "privateuse")},
+			wantCode: exitcode.FindingsDetected,
+		},
+		{
 			name:     "invalid path",
 			args:     []string{missingPath},
 			wantCode: exitcode.ExecutionError,

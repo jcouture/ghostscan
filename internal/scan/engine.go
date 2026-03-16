@@ -62,10 +62,13 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 		})
 	}
 
-	findings := detector.NewInvisible().Detect(detector.File{
+	file := detector.File{
 		Path:         fileContext.Path,
 		Observations: observations,
-	})
+	}
+
+	findings := detector.NewInvisible().Detect(file)
+	findings = append(findings, detector.NewPrivateUse().Detect(file)...)
 	finding.Sort(findings)
 
 	return findings, nil

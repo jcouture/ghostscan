@@ -18,47 +18,41 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package unicodeutil
+package detector
 
-func IsInvisible(r rune) bool {
-	switch r {
-	case ZeroWidthSpace,
-		ZeroWidthNonJoiner,
-		ZeroWidthJoiner,
-		WordJoiner,
-		ZeroWidthNoBreakSpace:
-		return true
-	default:
-		return false
-	}
+import (
+	"fmt"
+
+	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/internal/unicodeutil"
+)
+
+const PrivateUseRuleID = "unicode/private-use"
+
+type PrivateUse struct{}
+
+func NewPrivateUse() PrivateUse {
+	return PrivateUse{}
 }
 
-func IsPrivateUse(r rune) bool {
-	switch {
-	case r >= 0xE000 && r <= 0xF8FF:
-		return true
-	case r >= 0xF0000 && r <= 0xFFFFD:
-		return true
-	case r >= 0x100000 && r <= 0x10FFFD:
-		return true
-	default:
-		return false
-	}
-}
+func (PrivateUse) Detect(file File) []finding.Finding {
+	findings := make([]finding.Finding, 0)
 
-func InvisibleName(r rune) string {
-	switch r {
-	case ZeroWidthSpace:
-		return "ZERO WIDTH SPACE"
-	case ZeroWidthNonJoiner:
-		return "ZERO WIDTH NON-JOINER"
-	case ZeroWidthJoiner:
-		return "ZERO WIDTH JOINER"
-	case WordJoiner:
-		return "WORD JOINER"
-	case ZeroWidthNoBreakSpace:
-		return "ZERO WIDTH NO-BREAK SPACE"
-	default:
-		return ""
+	for _, observation := range file.Observations {
+		if !unicodeutil.IsPrivateUse(observation.Rune) {
+			continue
+		}
+
+		findings = append(findings, finding.Finding{
+			Path:     file.Path,
+			Line:     observation.Line,
+			Column:   observation.Column,
+			RuleID:   PrivateUseRuleID,
+			Severity: finding.SeverityMedium,
+			Message:  fmt.Sprintf("Private Use Area Unicode character detected: U+%04X", observation.Rune),
+			Evidence: unicodeutil.RenderRune(observation.Rune),
+		})
 	}
+
+	return findings
 }

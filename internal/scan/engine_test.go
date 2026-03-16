@@ -77,3 +77,49 @@ func TestEngineScanFileFindings(t *testing.T) {
 		t.Fatalf("findings[0].RuleID = %q, want unicode/invisible", findings[0].RuleID)
 	}
 }
+
+func TestEngineScanFilePrivateUseFindings(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("privateuse", "all.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 3 {
+		t.Fatalf("len(findings) = %d, want 3", len(findings))
+	}
+
+	tests := []struct {
+		index        int
+		wantLine     int
+		wantColumn   int
+		wantRuleID   string
+		wantEvidence string
+	}{
+		{index: 0, wantLine: 1, wantColumn: 2, wantRuleID: "unicode/private-use", wantEvidence: "<U+E000>"},
+		{index: 1, wantLine: 2, wantColumn: 2, wantRuleID: "unicode/private-use", wantEvidence: "<U+F0000>"},
+		{index: 2, wantLine: 3, wantColumn: 2, wantRuleID: "unicode/private-use", wantEvidence: "<U+100000>"},
+	}
+
+	for _, tt := range tests {
+		if findings[tt.index].Line != tt.wantLine || findings[tt.index].Column != tt.wantColumn {
+			t.Fatalf(
+				"findings[%d] position = (%d, %d), want (%d, %d)",
+				tt.index,
+				findings[tt.index].Line,
+				findings[tt.index].Column,
+				tt.wantLine,
+				tt.wantColumn,
+			)
+		}
+		if findings[tt.index].RuleID != tt.wantRuleID {
+			t.Fatalf("findings[%d].RuleID = %q, want %q", tt.index, findings[tt.index].RuleID, tt.wantRuleID)
+		}
+		if findings[tt.index].Evidence != tt.wantEvidence {
+			t.Fatalf("findings[%d].Evidence = %q, want %q", tt.index, findings[tt.index].Evidence, tt.wantEvidence)
+		}
+	}
+}

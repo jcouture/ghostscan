@@ -52,6 +52,39 @@ func TestIsInvisible(t *testing.T) {
 	}
 }
 
+func TestIsPrivateUse(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		r    rune
+		want bool
+	}{
+		{name: "bmp private use range start", r: '\uE000', want: true},
+		{name: "bmp private use range end", r: '\uF8FF', want: true},
+		{name: "supplementary private use area a start", r: '\U000F0000', want: true},
+		{name: "supplementary private use area a end", r: '\U000FFFFD', want: true},
+		{name: "supplementary private use area b start", r: '\U00100000', want: true},
+		{name: "supplementary private use area b end", r: '\U0010FFFD', want: true},
+		{name: "before bmp private use", r: '\uD7FF', want: false},
+		{name: "after bmp private use", r: '\uF900', want: false},
+		{name: "before supplementary private use area a", r: '\U000EFFFF', want: false},
+		{name: "after supplementary private use area a", r: '\U00100000' - 1, want: false},
+		{name: "after supplementary private use area b", r: '\U0010FFFE', want: false},
+		{name: "ascii letter", r: 'A', want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsPrivateUse(tt.r); got != tt.want {
+				t.Fatalf("IsPrivateUse(%U) = %v, want %v", tt.r, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRenderRune(t *testing.T) {
 	t.Parallel()
 

@@ -141,3 +141,28 @@ func TestRunReportsInvisibleFindings(t *testing.T) {
 		t.Fatalf("stdout = %q, want invisible rule output", output)
 	}
 }
+
+func TestRunReportsPrivateUseFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	findings, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "privateuse"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if len(findings) != 3 {
+		t.Fatalf("len(findings) = %d, want 3", len(findings))
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "<U+E000>") {
+		t.Fatalf("stdout = %q, want rendered PUA evidence", output)
+	}
+	if !strings.Contains(output, "rule: unicode/private-use") {
+		t.Fatalf("stdout = %q, want private use rule output", output)
+	}
+}
