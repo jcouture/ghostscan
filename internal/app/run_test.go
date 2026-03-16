@@ -194,3 +194,31 @@ func TestRunReportsBidiFindings(t *testing.T) {
 		t.Fatalf("stdout = %q, want bidi rule output", output)
 	}
 }
+
+func TestRunReportsPayloadFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	findings, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "payload"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if len(findings) != 158 {
+		t.Fatalf("len(findings) = %d, want 158", len(findings))
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[HIGH] Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters") {
+		t.Fatalf("stdout = %q, want invisible payload finding", output)
+	}
+	if !strings.Contains(output, "rule: unicode/payload") {
+		t.Fatalf("stdout = %q, want payload rule output", output)
+	}
+	if !strings.Contains(output, "evidence: "+strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17)) {
+		t.Fatalf("stdout = %q, want visible payload evidence", output)
+	}
+}

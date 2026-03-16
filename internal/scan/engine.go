@@ -70,6 +70,7 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 	findings := detector.NewInvisible().Detect(file)
 	findings = append(findings, detector.NewPrivateUse().Detect(file)...)
 	findings = append(findings, detector.NewBidi().Detect(file)...)
+	findings = append(findings, detector.NewPayload().Detect(file)...)
 	finding.Sort(findings)
 
 	return findings, nil

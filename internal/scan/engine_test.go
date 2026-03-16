@@ -194,3 +194,190 @@ func TestEngineScanFileCleanBidiInput(t *testing.T) {
 		t.Fatalf("len(findings) = %d, want 0", len(findings))
 	}
 }
+
+func TestEngineScanFilePayloadFixtures(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	tests := []struct {
+		name         string
+		fixture      string
+		wantCount    int
+		wantFindings []struct {
+			line     int
+			column   int
+			message  string
+			evidence string
+		}
+	}{
+		{
+			name:      "clean fixture",
+			fixture:   "clean.txt",
+			wantCount: 0,
+		},
+		{
+			name:      "invisible short fixture",
+			fixture:   "invisible_short.txt",
+			wantCount: 16,
+		},
+		{
+			name:      "private use short fixture",
+			fixture:   "privateuse_short.txt",
+			wantCount: 16,
+		},
+		{
+			name:      "invisible payload run",
+			fixture:   "invisible_long.txt",
+			wantCount: 18,
+			wantFindings: []struct {
+				line     int
+				column   int
+				message  string
+				evidence string
+			}{
+				{
+					line:     1,
+					column:   2,
+					message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
+					evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
+				},
+			},
+		},
+		{
+			name:      "private use payload run",
+			fixture:   "privateuse_long.txt",
+			wantCount: 18,
+			wantFindings: []struct {
+				line     int
+				column   int
+				message  string
+				evidence string
+			}{
+				{
+					line:     1,
+					column:   2,
+					message:  "Suspicious encoded payload sequence detected: 17 consecutive private-use Unicode characters",
+					evidence: strings.Repeat("<U+E000>", 17),
+				},
+			},
+		},
+		{
+			name:      "two payload runs",
+			fixture:   "two_runs.txt",
+			wantCount: 36,
+			wantFindings: []struct {
+				line     int
+				column   int
+				message  string
+				evidence string
+			}{
+				{
+					line:     1,
+					column:   2,
+					message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
+					evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
+				},
+				{
+					line:     1,
+					column:   20,
+					message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
+					evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
+				},
+			},
+		},
+		{
+			name:      "mixed payload classes",
+			fixture:   "mixed_runs.txt",
+			wantCount: 36,
+			wantFindings: []struct {
+				line     int
+				column   int
+				message  string
+				evidence string
+			}{
+				{
+					line:     1,
+					column:   2,
+					message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
+					evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
+				},
+				{
+					line:     1,
+					column:   19,
+					message:  "Suspicious encoded payload sequence detected: 17 consecutive private-use Unicode characters",
+					evidence: strings.Repeat("<U+E000>", 17),
+				},
+			},
+		},
+		{
+			name:      "multiline payload start position",
+			fixture:   "multiline_start.txt",
+			wantCount: 18,
+			wantFindings: []struct {
+				line     int
+				column   int
+				message  string
+				evidence string
+			}{
+				{
+					line:     2,
+					column:   4,
+					message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
+					evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			findings, err := engine.ScanFile(context.Background(), fixturePath("payload", tt.fixture))
+			if err != nil {
+				t.Fatalf("ScanFile() error = %v", err)
+			}
+
+			if len(findings) != tt.wantCount {
+				t.Fatalf("len(findings) = %d, want %d", len(findings), tt.wantCount)
+			}
+
+			payloadFindings := make([]struct {
+				line     int
+				column   int
+				message  string
+				evidence string
+			}, 0, len(tt.wantFindings))
+			for _, item := range findings {
+				if item.RuleID != "unicode/payload" {
+					continue
+				}
+				payloadFindings = append(payloadFindings, struct {
+					line     int
+					column   int
+					message  string
+					evidence string
+				}{
+					line:     item.Line,
+					column:   item.Column,
+					message:  item.Message,
+					evidence: item.Evidence,
+				})
+				if string(item.Severity) != "HIGH" {
+					t.Fatalf("payload severity = %q, want HIGH", item.Severity)
+				}
+			}
+
+			if len(payloadFindings) != len(tt.wantFindings) {
+				t.Fatalf("len(payloadFindings) = %d, want %d", len(payloadFindings), len(tt.wantFindings))
+			}
+
+			for index, want := range tt.wantFindings {
+				if payloadFindings[index] != want {
+					t.Fatalf("payloadFindings[%d] = %#v, want %#v", index, payloadFindings[index], want)
+				}
+			}
+		})
+	}
+}
