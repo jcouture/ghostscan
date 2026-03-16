@@ -40,21 +40,28 @@ func TestExecute(t *testing.T) {
 		args     []string
 		wantCode int
 		wantErr  string
+		wantANSI bool
 	}{
 		{
 			name:     "valid directory path",
-			args:     []string{tempDir},
+			args:     []string{"-nc", tempDir},
 			wantCode: exitcode.Success,
 		},
 		{
 			name:     "findings detected",
-			args:     []string{filepath.Join("..", "testdata", "invisible")},
+			args:     []string{"-nc", filepath.Join("..", "testdata", "invisible")},
 			wantCode: exitcode.FindingsDetected,
 		},
 		{
 			name:     "private use findings detected",
-			args:     []string{filepath.Join("..", "testdata", "privateuse")},
+			args:     []string{"-no-color", filepath.Join("..", "testdata", "privateuse")},
 			wantCode: exitcode.FindingsDetected,
+		},
+		{
+			name:     "color enabled by default",
+			args:     []string{filepath.Join("..", "testdata", "bidi")},
+			wantCode: exitcode.FindingsDetected,
+			wantANSI: true,
 		},
 		{
 			name:     "invalid path",
@@ -80,6 +87,14 @@ func TestExecute(t *testing.T) {
 			code := execute(context.Background(), tt.args, &stdout, &stderr)
 			if code != tt.wantCode {
 				t.Fatalf("execute() code = %d, want %d", code, tt.wantCode)
+			}
+
+			if tt.wantANSI {
+				if !strings.Contains(stdout.String(), "\x1b[") {
+					t.Fatalf("stdout = %q, want ANSI output", stdout.String())
+				}
+			} else if strings.Contains(stdout.String(), "\x1b[") {
+				t.Fatalf("stdout = %q, want plain text output", stdout.String())
 			}
 
 			if tt.wantErr == "" {

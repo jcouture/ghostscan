@@ -34,6 +34,7 @@ import (
 type Options struct {
 	Path   string
 	Stdout io.Writer
+	Color  bool
 }
 
 type Result struct {
@@ -70,7 +71,10 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 
 	finding.Sort(findings)
 
-	if err := report.WriteHuman(opts.Stdout, findings); err != nil {
+	if err := report.WriteHuman(opts.Stdout, findings, report.Options{
+		FilesScanned: len(files),
+		Color:        opts.Color,
+	}); err != nil {
 		return Result{}, fmt.Errorf("write report: %w", err)
 	}
 

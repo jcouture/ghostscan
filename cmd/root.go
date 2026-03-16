@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -39,17 +40,34 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		args = os.Args[1:]
 	}
 
-	if len(args) > 1 {
-		_, _ = fmt.Fprintf(stderr, "accepts at most 1 arg(s), received %d\n", len(args))
+	flags := flag.NewFlagSet("ghostscan", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+
+	var shortNoColor bool
+	var longNoColor bool
+	flags.BoolVar(&shortNoColor, "nc", false, "disable color")
+	flags.BoolVar(&longNoColor, "no-color", false, "disable color")
+
+	if err := flags.Parse(args); err != nil {
+		return exitcode.ExecutionError
+	}
+
+	rest := flags.Args()
+	if len(rest) > 1 {
+		_, _ = fmt.Fprintf(stderr, "accepts at most 1 arg(s), received %d\n", len(rest))
 		return exitcode.ExecutionError
 	}
 
 	path := "."
-	if len(args) == 1 {
-		path = args[0]
+	if len(rest) == 1 {
+		path = rest[0]
 	}
 
-	result, err := app.Run(ctx, app.Options{Path: path, Stdout: stdout})
+	result, err := app.Run(ctx, app.Options{
+		Path:   path,
+		Stdout: stdout,
+		Color:  !(shortNoColor || longNoColor),
+	})
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 		return exitcode.ExecutionError

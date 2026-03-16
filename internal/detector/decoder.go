@@ -29,7 +29,7 @@ import (
 
 const (
 	DecoderRuleID              = "unicode/decoder"
-	decoderCorrelationDistance = 20
+	decoderCorrelationDistance = 25
 )
 
 type Decoder struct{}

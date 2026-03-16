@@ -20,44 +20,42 @@
 
 package report
 
-import (
-	"testing"
+import "github.com/fatih/color"
 
-	"github.com/jcouture/ghostscan/internal/finding"
-)
+type palette struct {
+	high   func(a ...any) string
+	medium func(a ...any) string
+	header func(a ...any) string
+	bold   func(a ...any) string
+}
 
-func TestSummarize(t *testing.T) {
-	t.Parallel()
-
-	got := summarize([]finding.Finding{
-		{
-			Path:     "src/a.js",
-			Severity: finding.SeverityHigh,
-		},
-		{
-			Path:     "src/a.js",
-			Severity: finding.SeverityMedium,
-		},
-		{
-			Path:     "src/b.js",
-			Severity: finding.SeverityMedium,
-		},
-	})
-
-	if got.totalFindings != 3 {
-		t.Fatalf("totalFindings = %d, want 3", got.totalFindings)
-	}
-	if got.filesWithFindings != 2 {
-		t.Fatalf("filesWithFindings = %d, want 2", got.filesWithFindings)
-	}
-	if len(got.severityCounts) != 2 {
-		t.Fatalf("len(severityCounts) = %d, want 2", len(got.severityCounts))
+func newPalette(enabled bool) palette {
+	if !enabled {
+		return palette{
+			high:   plainSprint,
+			medium: plainSprint,
+			header: plainSprint,
+			bold:   plainSprint,
+		}
 	}
 
-	if got.severityCounts[0].severity != finding.SeverityHigh || got.severityCounts[0].count != 1 {
-		t.Fatalf("severityCounts[0] = %+v, want HIGH=1", got.severityCounts[0])
+	high := color.New(color.FgRed, color.Bold)
+	high.EnableColor()
+	medium := color.New(color.FgYellow, color.Bold)
+	medium.EnableColor()
+	header := color.New(color.FgCyan, color.Bold)
+	header.EnableColor()
+	bold := color.New(color.Bold)
+	bold.EnableColor()
+
+	return palette{
+		high:   high.SprintFunc(),
+		medium: medium.SprintFunc(),
+		header: header.SprintFunc(),
+		bold:   bold.SprintFunc(),
 	}
-	if got.severityCounts[1].severity != finding.SeverityMedium || got.severityCounts[1].count != 2 {
-		t.Fatalf("severityCounts[1] = %+v, want MEDIUM=2", got.severityCounts[1])
-	}
+}
+
+func plainSprint(a ...any) string {
+	return color.New().Sprint(a...)
 }

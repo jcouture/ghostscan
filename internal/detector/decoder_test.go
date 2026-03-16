@@ -147,11 +147,11 @@ func TestCorrelateDecoderPayload(t *testing.T) {
 			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
 		},
 		{
-			name:         "payload out of range",
+			name:         "payload within 25 lines",
 			payloadLine:  1,
 			decoderLine:  23,
-			wantSeverity: finding.SeverityMedium,
-			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval(",
+			wantSeverity: finding.SeverityHigh,
+			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
 		},
 	}
 

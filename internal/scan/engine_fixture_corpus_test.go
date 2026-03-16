@@ -350,11 +350,11 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 			wantDecoderLevel:   finding.SeverityHigh,
 		},
 		{
-			name:               "far payload keeps decoder severity medium",
+			name:               "far payload within 25 lines still correlates",
 			fixture:            fixturePath("mixed", "glassworm_buffer_eval_far.js"),
 			wantCount:          20,
-			wantDecoderMessage: "",
-			wantDecoderLevel:   finding.SeverityMedium,
+			wantDecoderMessage: " near suspicious encoded payload sequence",
+			wantDecoderLevel:   finding.SeverityHigh,
 		},
 	}
 

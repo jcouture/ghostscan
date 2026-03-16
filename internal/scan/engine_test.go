@@ -681,16 +681,16 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 		wantMessage  string
 	}{
 		{
-			name:         "payload within 20 lines",
+			name:         "payload within 25 lines",
 			fixture:      "correlated_decoder_near_payload.js",
 			wantSeverity: "HIGH",
 			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
 		},
 		{
-			name:         "payload farther than 20 lines",
+			name:         "payload within 25 lines for far fixture",
 			fixture:      "correlated_decoder_far_payload.js",
-			wantSeverity: "MEDIUM",
-			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval(",
+			wantSeverity: "HIGH",
+			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
 		},
 	}
 
