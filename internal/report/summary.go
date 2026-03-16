@@ -90,30 +90,6 @@ func writeSummary(w reportWriter, s summary) error {
 	return nil
 }
 
-func orderedFindings(findings []finding.Finding) []finding.Finding {
-	ordered := append([]finding.Finding(nil), findings...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		left := ordered[i]
-		right := ordered[j]
-
-		if left.Path != right.Path {
-			return left.Path < right.Path
-		}
-		if left.Line != right.Line {
-			return left.Line < right.Line
-		}
-		if left.Column != right.Column {
-			return left.Column < right.Column
-		}
-		if left.RuleID != right.RuleID {
-			return left.RuleID < right.RuleID
-		}
-		return left.Message < right.Message
-	})
-
-	return ordered
-}
-
 func severityRank(severity finding.Severity) int {
 	switch severity {
 	case finding.SeverityHigh:

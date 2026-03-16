@@ -72,15 +72,6 @@ func TestHumanReporterGolden(t *testing.T) {
 					Evidence: "<U+200B ZERO WIDTH SPACE>",
 				},
 				{
-					Path:     "src/b.js",
-					Line:     10,
-					Column:   2,
-					RuleID:   "unicode/payload",
-					Severity: finding.SeverityHigh,
-					Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
-					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
-				},
-				{
 					Path:     "src/a.js",
 					Line:     2,
 					Column:   9,
@@ -88,6 +79,15 @@ func TestHumanReporterGolden(t *testing.T) {
 					Severity: finding.SeverityMedium,
 					Message:  "Private-use Unicode character detected: U+E000",
 					Evidence: "<U+E000>",
+				},
+				{
+					Path:     "src/b.js",
+					Line:     10,
+					Column:   2,
+					RuleID:   "unicode/payload",
+					Severity: finding.SeverityHigh,
+					Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
+					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
 				},
 			},
 			golden: "multiple.golden",
@@ -113,64 +113,6 @@ func TestHumanReporterGolden(t *testing.T) {
 				t.Fatalf("report output mismatch:\n%s", diff)
 			}
 		})
-	}
-}
-
-func TestHumanReporterDeterministicOrdering(t *testing.T) {
-	t.Parallel()
-
-	findings := []finding.Finding{
-		{
-			Path:     "z-last.js",
-			Line:     4,
-			Column:   9,
-			RuleID:   "unicode/private-use",
-			Severity: finding.SeverityMedium,
-			Message:  "Private-use Unicode character detected: U+E000",
-			Evidence: "<U+E000>",
-		},
-		{
-			Path:     "a-first.js",
-			Line:     2,
-			Column:   1,
-			RuleID:   "unicode/bidi",
-			Severity: finding.SeverityHigh,
-			Message:  "Trojan Source character detected",
-			Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
-		},
-		{
-			Path:     "a-first.js",
-			Line:     2,
-			Column:   4,
-			RuleID:   "unicode/invisible",
-			Severity: finding.SeverityMedium,
-			Message:  "Invisible Unicode character detected: U+200B ZERO WIDTH SPACE",
-			Evidence: "<U+200B ZERO WIDTH SPACE>",
-		},
-	}
-
-	var first bytes.Buffer
-	if err := WriteHuman(&first, findings); err != nil {
-		t.Fatalf("first WriteHuman() error = %v", err)
-	}
-
-	var second bytes.Buffer
-	if err := WriteHuman(&second, findings); err != nil {
-		t.Fatalf("second WriteHuman() error = %v", err)
-	}
-
-	if first.String() != second.String() {
-		t.Fatalf("WriteHuman() output is not stable\nfirst:\n%s\nsecond:\n%s", first.String(), second.String())
-	}
-
-	output := first.String()
-	firstIndex := strings.Index(output, "file: a-first.js")
-	lastIndex := strings.Index(output, "file: z-last.js")
-	if firstIndex == -1 || lastIndex == -1 {
-		t.Fatalf("output = %q, want both file entries", output)
-	}
-	if firstIndex > lastIndex {
-		t.Fatalf("output = %q, want sorted file order", output)
 	}
 }
 

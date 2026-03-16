@@ -76,7 +76,6 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 	payloadFindings := detector.NewPayload().Detect(file)
 	findings = append(findings, payloadFindings...)
 	findings = append(findings, detector.CorrelateDecoderPayload(detector.NewDecoder().Detect(file), payloadFindings)...)
-	finding.Sort(findings)
 
 	return findings, nil
 }

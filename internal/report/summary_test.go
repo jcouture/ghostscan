@@ -61,31 +61,3 @@ func TestSummarize(t *testing.T) {
 		t.Fatalf("severityCounts[1] = %+v, want MEDIUM=2", got.severityCounts[1])
 	}
 }
-
-func TestOrderedFindingsPreservesEqualInputOrder(t *testing.T) {
-	t.Parallel()
-
-	findings := []finding.Finding{
-		{
-			Path:     "src/a.js",
-			Line:     1,
-			Column:   1,
-			RuleID:   "unicode/invisible",
-			Message:  "same",
-			Evidence: "first",
-		},
-		{
-			Path:     "src/a.js",
-			Line:     1,
-			Column:   1,
-			RuleID:   "unicode/invisible",
-			Message:  "same",
-			Evidence: "second",
-		},
-	}
-
-	ordered := orderedFindings(findings)
-	if ordered[0].Evidence != "first" || ordered[1].Evidence != "second" {
-		t.Fatalf("ordered findings = %+v, want equal-key input order preserved", ordered)
-	}
-}

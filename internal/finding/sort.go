@@ -23,22 +23,23 @@ package finding
 import "sort"
 
 func Sort(findings []Finding) {
-	sort.Slice(findings, func(i, j int) bool {
-		left := findings[i]
-		right := findings[j]
-
-		if left.Path != right.Path {
-			return left.Path < right.Path
-		}
-		if left.Line != right.Line {
-			return left.Line < right.Line
-		}
-		if left.Column != right.Column {
-			return left.Column < right.Column
-		}
-		if left.RuleID != right.RuleID {
-			return left.RuleID < right.RuleID
-		}
-		return left.Message < right.Message
+	sort.SliceStable(findings, func(i, j int) bool {
+		return less(findings[i], findings[j])
 	})
+}
+
+func less(left, right Finding) bool {
+	if left.Path != right.Path {
+		return left.Path < right.Path
+	}
+	if left.Line != right.Line {
+		return left.Line < right.Line
+	}
+	if left.Column != right.Column {
+		return left.Column < right.Column
+	}
+	if left.RuleID != right.RuleID {
+		return left.RuleID < right.RuleID
+	}
+	return left.Message < right.Message
 }

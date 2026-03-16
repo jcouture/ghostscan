@@ -42,9 +42,7 @@ func WriteHuman(w io.Writer, findings []finding.Finding) error {
 }
 
 func (r *HumanReporter) Write(findings []finding.Finding) error {
-	ordered := orderedFindings(findings)
-
-	for i, item := range ordered {
+	for i, item := range findings {
 		if i > 0 {
 			if err := r.writer.blankLine(); err != nil {
 				return fmt.Errorf("write finding separator: %w", err)
@@ -71,13 +69,13 @@ func (r *HumanReporter) Write(findings []finding.Finding) error {
 		}
 	}
 
-	if len(ordered) > 0 {
+	if len(findings) > 0 {
 		if err := r.writer.blankLine(); err != nil {
 			return fmt.Errorf("write summary separator: %w", err)
 		}
 	}
 
-	if err := writeSummary(r.writer, summarize(ordered)); err != nil {
+	if err := writeSummary(r.writer, summarize(findings)); err != nil {
 		return fmt.Errorf("write summary: %w", err)
 	}
 
