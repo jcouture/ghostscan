@@ -1,0 +1,1 @@
+The words eval and Buffer.from appear in prose without call syntax.
