@@ -23,5 +23,6 @@ package finding
 type Severity string
 
 const (
+	SeverityHigh   Severity = "HIGH"
 	SeverityMedium Severity = "MEDIUM"
 )

@@ -166,3 +166,31 @@ func TestRunReportsPrivateUseFindings(t *testing.T) {
 		t.Fatalf("stdout = %q, want private use rule output", output)
 	}
 }
+
+func TestRunReportsBidiFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	findings, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "bidi"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if len(findings) != 9 {
+		t.Fatalf("len(findings) = %d, want 9", len(findings))
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[HIGH] Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE") {
+		t.Fatalf("stdout = %q, want bidi finding header", output)
+	}
+	if !strings.Contains(output, "evidence: <U+202E RIGHT-TO-LEFT OVERRIDE>") {
+		t.Fatalf("stdout = %q, want rendered bidi evidence", output)
+	}
+	if !strings.Contains(output, "rule: unicode/bidi") {
+		t.Fatalf("stdout = %q, want bidi rule output", output)
+	}
+}

@@ -123,3 +123,74 @@ func TestEngineScanFilePrivateUseFindings(t *testing.T) {
 		}
 	}
 }
+
+func TestEngineScanFileBidiFindings(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("bidi", "all.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 9 {
+		t.Fatalf("len(findings) = %d, want 9", len(findings))
+	}
+
+	tests := []struct {
+		index        int
+		wantLine     int
+		wantColumn   int
+		wantRuleID   string
+		wantSeverity string
+		wantEvidence string
+	}{
+		{index: 0, wantLine: 1, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202A LEFT-TO-RIGHT EMBEDDING>"},
+		{index: 1, wantLine: 2, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202B RIGHT-TO-LEFT EMBEDDING>"},
+		{index: 2, wantLine: 3, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202C POP DIRECTIONAL FORMATTING>"},
+		{index: 3, wantLine: 4, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202D LEFT-TO-RIGHT OVERRIDE>"},
+		{index: 4, wantLine: 5, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+		{index: 5, wantLine: 6, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2066 LEFT-TO-RIGHT ISOLATE>"},
+		{index: 6, wantLine: 7, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2067 RIGHT-TO-LEFT ISOLATE>"},
+		{index: 7, wantLine: 8, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2068 FIRST STRONG ISOLATE>"},
+		{index: 8, wantLine: 9, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2069 POP DIRECTIONAL ISOLATE>"},
+	}
+
+	for _, tt := range tests {
+		if findings[tt.index].Line != tt.wantLine || findings[tt.index].Column != tt.wantColumn {
+			t.Fatalf(
+				"findings[%d] position = (%d, %d), want (%d, %d)",
+				tt.index,
+				findings[tt.index].Line,
+				findings[tt.index].Column,
+				tt.wantLine,
+				tt.wantColumn,
+			)
+		}
+		if findings[tt.index].RuleID != tt.wantRuleID {
+			t.Fatalf("findings[%d].RuleID = %q, want %q", tt.index, findings[tt.index].RuleID, tt.wantRuleID)
+		}
+		if string(findings[tt.index].Severity) != tt.wantSeverity {
+			t.Fatalf("findings[%d].Severity = %q, want %q", tt.index, findings[tt.index].Severity, tt.wantSeverity)
+		}
+		if findings[tt.index].Evidence != tt.wantEvidence {
+			t.Fatalf("findings[%d].Evidence = %q, want %q", tt.index, findings[tt.index].Evidence, tt.wantEvidence)
+		}
+	}
+}
+
+func TestEngineScanFileCleanBidiInput(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("bidi", "clean.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 0 {
+		t.Fatalf("len(findings) = %d, want 0", len(findings))
+	}
+}

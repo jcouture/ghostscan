@@ -23,6 +23,10 @@ package unicodeutil
 import "fmt"
 
 func RenderRune(r rune) string {
+	if name := BidiControlName(r); name != "" {
+		return fmt.Sprintf("<U+%04X %s>", r, name)
+	}
+
 	if name := InvisibleName(r); name != "" {
 		return fmt.Sprintf("<U+%04X %s>", r, name)
 	}

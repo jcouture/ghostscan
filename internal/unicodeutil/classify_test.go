@@ -85,12 +85,58 @@ func TestIsPrivateUse(t *testing.T) {
 	}
 }
 
+func TestIsBidiControl(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		r    rune
+		want bool
+	}{
+		{name: "left-to-right embedding", r: LeftToRightEmbedding, want: true},
+		{name: "right-to-left embedding", r: RightToLeftEmbedding, want: true},
+		{name: "pop directional formatting", r: PopDirectionalFormat, want: true},
+		{name: "left-to-right override", r: LeftToRightOverride, want: true},
+		{name: "right-to-left override", r: RightToLeftOverride, want: true},
+		{name: "left-to-right isolate", r: LeftToRightIsolate, want: true},
+		{name: "right-to-left isolate", r: RightToLeftIsolate, want: true},
+		{name: "first strong isolate", r: FirstStrongIsolate, want: true},
+		{name: "pop directional isolate", r: PopDirectionalIsolate, want: true},
+		{name: "left-to-right mark neighbor", r: '\u200E', want: false},
+		{name: "ascii letter", r: 'A', want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsBidiControl(tt.r); got != tt.want {
+				t.Fatalf("IsBidiControl(%U) = %v, want %v", tt.r, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRenderRune(t *testing.T) {
 	t.Parallel()
 
-	got := RenderRune(ZeroWidthSpace)
-	want := "<U+200B ZERO WIDTH SPACE>"
-	if got != want {
-		t.Fatalf("RenderRune(%U) = %q, want %q", ZeroWidthSpace, got, want)
+	tests := []struct {
+		name string
+		r    rune
+		want string
+	}{
+		{name: "invisible", r: ZeroWidthSpace, want: "<U+200B ZERO WIDTH SPACE>"},
+		{name: "bidi", r: RightToLeftOverride, want: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+		{name: "plain", r: '\uE000', want: "<U+E000>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := RenderRune(tt.r); got != tt.want {
+				t.Fatalf("RenderRune(%U) = %q, want %q", tt.r, got, tt.want)
+			}
+		})
 	}
 }

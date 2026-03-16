@@ -18,21 +18,42 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package unicodeutil
+package detector
 
-const (
-	ZeroWidthSpace        rune = '\u200B'
-	ZeroWidthNonJoiner    rune = '\u200C'
-	ZeroWidthJoiner       rune = '\u200D'
-	WordJoiner            rune = '\u2060'
-	ZeroWidthNoBreakSpace rune = '\uFEFF'
-	LeftToRightEmbedding  rune = '\u202A'
-	RightToLeftEmbedding  rune = '\u202B'
-	PopDirectionalFormat  rune = '\u202C'
-	LeftToRightOverride   rune = '\u202D'
-	RightToLeftOverride   rune = '\u202E'
-	LeftToRightIsolate    rune = '\u2066'
-	RightToLeftIsolate    rune = '\u2067'
-	FirstStrongIsolate    rune = '\u2068'
-	PopDirectionalIsolate rune = '\u2069'
+import (
+	"fmt"
+
+	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
+
+const BidiRuleID = "unicode/bidi"
+
+type Bidi struct{}
+
+func NewBidi() Bidi {
+	return Bidi{}
+}
+
+func (Bidi) Detect(file File) []finding.Finding {
+	findings := make([]finding.Finding, 0)
+
+	for _, observation := range file.Observations {
+		if !unicodeutil.IsBidiControl(observation.Rune) {
+			continue
+		}
+
+		name := unicodeutil.BidiControlName(observation.Rune)
+		findings = append(findings, finding.Finding{
+			Path:     file.Path,
+			Line:     observation.Line,
+			Column:   observation.Column,
+			RuleID:   BidiRuleID,
+			Severity: finding.SeverityHigh,
+			Message:  fmt.Sprintf("Trojan Source bidi control character detected: U+%04X %s", observation.Rune, name),
+			Evidence: unicodeutil.RenderRune(observation.Rune),
+		})
+	}
+
+	return findings
+}

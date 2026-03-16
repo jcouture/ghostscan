@@ -33,6 +33,23 @@ func IsInvisible(r rune) bool {
 	}
 }
 
+func IsBidiControl(r rune) bool {
+	switch r {
+	case LeftToRightEmbedding,
+		RightToLeftEmbedding,
+		PopDirectionalFormat,
+		LeftToRightOverride,
+		RightToLeftOverride,
+		LeftToRightIsolate,
+		RightToLeftIsolate,
+		FirstStrongIsolate,
+		PopDirectionalIsolate:
+		return true
+	default:
+		return false
+	}
+}
+
 func IsPrivateUse(r rune) bool {
 	switch {
 	case r >= 0xE000 && r <= 0xF8FF:
@@ -43,6 +60,31 @@ func IsPrivateUse(r rune) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func BidiControlName(r rune) string {
+	switch r {
+	case LeftToRightEmbedding:
+		return "LEFT-TO-RIGHT EMBEDDING"
+	case RightToLeftEmbedding:
+		return "RIGHT-TO-LEFT EMBEDDING"
+	case PopDirectionalFormat:
+		return "POP DIRECTIONAL FORMATTING"
+	case LeftToRightOverride:
+		return "LEFT-TO-RIGHT OVERRIDE"
+	case RightToLeftOverride:
+		return "RIGHT-TO-LEFT OVERRIDE"
+	case LeftToRightIsolate:
+		return "LEFT-TO-RIGHT ISOLATE"
+	case RightToLeftIsolate:
+		return "RIGHT-TO-LEFT ISOLATE"
+	case FirstStrongIsolate:
+		return "FIRST STRONG ISOLATE"
+	case PopDirectionalIsolate:
+		return "POP DIRECTIONAL ISOLATE"
+	default:
+		return ""
 	}
 }
 
