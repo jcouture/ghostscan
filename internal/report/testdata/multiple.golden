@@ -1,0 +1,26 @@
+[MEDIUM] Invisible Unicode character detected: U+200B ZERO WIDTH SPACE
+file: src/a.js
+line: 2
+column: 4
+rule: unicode/invisible
+evidence: <U+200B ZERO WIDTH SPACE>
+
+[MEDIUM] Private-use Unicode character detected: U+E000
+file: src/a.js
+line: 2
+column: 9
+rule: unicode/private-use
+evidence: <U+E000>
+
+[HIGH] Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters
+file: src/b.js
+line: 10
+column: 2
+rule: unicode/payload
+evidence: <U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE>
+
+Summary:
+  total findings: 3
+  files with findings: 2
+  high: 1
+  medium: 2

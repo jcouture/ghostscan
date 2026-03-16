@@ -1,0 +1,11 @@
+[HIGH] Trojan Source character detected
+file: src/index.js
+line: 87
+column: 14
+rule: unicode/bidi
+evidence: <U+202E RIGHT-TO-LEFT OVERRIDE>
+
+Summary:
+  total findings: 1
+  files with findings: 1
+  high: 1

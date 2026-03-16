@@ -27,26 +27,58 @@ import (
 	"github.com/jcouture/ghostscan/internal/finding"
 )
 
+type HumanReporter struct {
+	writer reportWriter
+}
+
+func NewHumanReporter(w io.Writer) *HumanReporter {
+	return &HumanReporter{
+		writer: newReportWriter(w),
+	}
+}
+
 func WriteHuman(w io.Writer, findings []finding.Finding) error {
-	for _, item := range findings {
-		if _, err := fmt.Fprintf(w, "[%s] %s\n", item.Severity, item.Message); err != nil {
+	return NewHumanReporter(w).Write(findings)
+}
+
+func (r *HumanReporter) Write(findings []finding.Finding) error {
+	ordered := orderedFindings(findings)
+
+	for i, item := range ordered {
+		if i > 0 {
+			if err := r.writer.blankLine(); err != nil {
+				return fmt.Errorf("write finding separator: %w", err)
+			}
+		}
+
+		if err := r.writer.linef("[%s] %s", item.Severity, item.Message); err != nil {
 			return fmt.Errorf("write finding header: %w", err)
 		}
-		if _, err := fmt.Fprintf(w, "file: %s\n", item.Path); err != nil {
+		if err := r.writer.linef("file: %s", item.Path); err != nil {
 			return fmt.Errorf("write finding file: %w", err)
 		}
-		if _, err := fmt.Fprintf(w, "line: %d\n", item.Line); err != nil {
+		if err := r.writer.linef("line: %d", item.Line); err != nil {
 			return fmt.Errorf("write finding line: %w", err)
 		}
-		if _, err := fmt.Fprintf(w, "column: %d\n", item.Column); err != nil {
+		if err := r.writer.linef("column: %d", item.Column); err != nil {
 			return fmt.Errorf("write finding column: %w", err)
 		}
-		if _, err := fmt.Fprintf(w, "rule: %s\n", item.RuleID); err != nil {
+		if err := r.writer.linef("rule: %s", item.RuleID); err != nil {
 			return fmt.Errorf("write finding rule: %w", err)
 		}
-		if _, err := fmt.Fprintf(w, "evidence: %s\n", item.Evidence); err != nil {
+		if err := r.writer.linef("evidence: %s", item.Evidence); err != nil {
 			return fmt.Errorf("write finding evidence: %w", err)
 		}
+	}
+
+	if len(ordered) > 0 {
+		if err := r.writer.blankLine(); err != nil {
+			return fmt.Errorf("write summary separator: %w", err)
+		}
+	}
+
+	if err := writeSummary(r.writer, summarize(ordered)); err != nil {
+		return fmt.Errorf("write summary: %w", err)
 	}
 
 	return nil
