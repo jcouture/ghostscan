@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package finding
+
+type Severity string
 
 const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
+	SeverityMedium Severity = "MEDIUM"
 )

@@ -26,6 +26,8 @@ import (
 	"io"
 
 	"github.com/jcouture/ghostscan/internal/filesystem"
+	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/internal/report"
 	"github.com/jcouture/ghostscan/internal/scan"
 )
 
@@ -34,10 +36,10 @@ type Options struct {
 	Stdout io.Writer
 }
 
-func Run(ctx context.Context, opts Options) error {
+func Run(ctx context.Context, opts Options) ([]finding.Finding, error) {
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("context canceled: %w", ctx.Err())
+		return nil, fmt.Errorf("context canceled: %w", ctx.Err())
 	default:
 	}
 
@@ -48,17 +50,25 @@ func Run(ctx context.Context, opts Options) error {
 
 	files, err := filesystem.Discover(path)
 	if err != nil {
-		return fmt.Errorf("discover files from %q: %w", path, err)
+		return nil, fmt.Errorf("discover files from %q: %w", path, err)
 	}
 
 	engine := scan.NewEngine()
+	findings := make([]finding.Finding, 0)
 	for _, f := range files {
-		if _, err := engine.ScanFile(ctx, f); err != nil {
-			return fmt.Errorf("scan discovered file %q: %w", f, err)
+		fileFindings, err := engine.ScanFile(ctx, f)
+		if err != nil {
+			return nil, fmt.Errorf("scan discovered file %q: %w", f, err)
 		}
 
-		fmt.Fprintln(opts.Stdout, f)
+		findings = append(findings, fileFindings...)
 	}
 
-	return nil
+	finding.Sort(findings)
+
+	if err := report.WriteHuman(opts.Stdout, findings); err != nil {
+		return nil, fmt.Errorf("write report: %w", err)
+	}
+
+	return findings, nil
 }

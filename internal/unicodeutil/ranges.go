@@ -18,10 +18,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package unicodeutil
 
 const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
+	ZeroWidthSpace        rune = '\u200B'
+	ZeroWidthNonJoiner    rune = '\u200C'
+	ZeroWidthJoiner       rune = '\u200D'
+	WordJoiner            rune = '\u2060'
+	ZeroWidthNoBreakSpace rune = '\uFEFF'
 )

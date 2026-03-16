@@ -18,10 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package finding
 
-const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
-)
+import "sort"
+
+func Sort(findings []Finding) {
+	sort.Slice(findings, func(i, j int) bool {
+		left := findings[i]
+		right := findings[j]
+
+		if left.Path != right.Path {
+			return left.Path < right.Path
+		}
+		if left.Line != right.Line {
+			return left.Line < right.Line
+		}
+		if left.Column != right.Column {
+			return left.Column < right.Column
+		}
+		if left.RuleID != right.RuleID {
+			return left.RuleID < right.RuleID
+		}
+		return left.Message < right.Message
+	})
+}

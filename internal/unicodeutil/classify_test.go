@@ -18,55 +18,46 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package scan
+package unicodeutil
 
-import (
-	"context"
-	"fmt"
+import "testing"
 
-	"github.com/jcouture/ghostscan/internal/detector"
-	"github.com/jcouture/ghostscan/internal/finding"
-)
+func TestIsInvisible(t *testing.T) {
+	t.Parallel()
 
-type Engine struct{}
-
-func NewEngine() *Engine {
-	return &Engine{}
-}
-
-func (e *Engine) ScanRaw(ctx context.Context, path string) (*Context, error) {
-	if e == nil {
-		return nil, fmt.Errorf("scan engine is nil")
+	tests := []struct {
+		name string
+		r    rune
+		want bool
+	}{
+		{name: "zero width space", r: ZeroWidthSpace, want: true},
+		{name: "zero width non-joiner", r: ZeroWidthNonJoiner, want: true},
+		{name: "zero width joiner", r: ZeroWidthJoiner, want: true},
+		{name: "word joiner", r: WordJoiner, want: true},
+		{name: "zero width no-break space", r: ZeroWidthNoBreakSpace, want: true},
+		{name: "ascii letter", r: 'A', want: false},
+		{name: "space", r: ' ', want: false},
+		{name: "left-to-right mark neighbor", r: '\u200E', want: false},
+		{name: "byte order mark neighbor", r: '\uFEFE', want: false},
 	}
 
-	fileContext, err := scanFile(ctx, path)
-	if err != nil {
-		return nil, fmt.Errorf("scan file %q: %w", path, err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	return fileContext, nil
-}
-
-func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, error) {
-	fileContext, err := e.ScanRaw(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-
-	observations := make([]detector.Observation, 0, len(fileContext.Observations))
-	for _, observation := range fileContext.Observations {
-		observations = append(observations, detector.Observation{
-			Rune:   observation.Rune,
-			Line:   observation.Line,
-			Column: observation.Column,
+			if got := IsInvisible(tt.r); got != tt.want {
+				t.Fatalf("IsInvisible(%U) = %v, want %v", tt.r, got, tt.want)
+			}
 		})
 	}
+}
 
-	findings := detector.NewInvisible().Detect(detector.File{
-		Path:         fileContext.Path,
-		Observations: observations,
-	})
-	finding.Sort(findings)
+func TestRenderRune(t *testing.T) {
+	t.Parallel()
 
-	return findings, nil
+	got := RenderRune(ZeroWidthSpace)
+	want := "<U+200B ZERO WIDTH SPACE>"
+	if got != want {
+		t.Fatalf("RenderRune(%U) = %q, want %q", ZeroWidthSpace, got, want)
+	}
 }

@@ -18,10 +18,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package unicodeutil
 
-const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
-)
+func IsInvisible(r rune) bool {
+	switch r {
+	case ZeroWidthSpace,
+		ZeroWidthNonJoiner,
+		ZeroWidthJoiner,
+		WordJoiner,
+		ZeroWidthNoBreakSpace:
+		return true
+	default:
+		return false
+	}
+}
+
+func InvisibleName(r rune) string {
+	switch r {
+	case ZeroWidthSpace:
+		return "ZERO WIDTH SPACE"
+	case ZeroWidthNonJoiner:
+		return "ZERO WIDTH NON-JOINER"
+	case ZeroWidthJoiner:
+		return "ZERO WIDTH JOINER"
+	case WordJoiner:
+		return "WORD JOINER"
+	case ZeroWidthNoBreakSpace:
+		return "ZERO WIDTH NO-BREAK SPACE"
+	default:
+		return ""
+	}
+}

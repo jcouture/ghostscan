@@ -18,10 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package finding
 
-const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
-)
+type Finding struct {
+	Path     string
+	Line     int
+	Column   int
+	RuleID   string
+	Severity Severity
+	Message  string
+	Evidence string
+}

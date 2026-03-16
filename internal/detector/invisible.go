@@ -18,10 +18,53 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package detector
 
-const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
+import (
+	"fmt"
+
+	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
+
+const InvisibleRuleID = "unicode/invisible"
+
+type Invisible struct{}
+
+type File struct {
+	Path         string
+	Observations []Observation
+}
+
+type Observation struct {
+	Rune   rune
+	Line   int
+	Column int
+}
+
+func NewInvisible() Invisible {
+	return Invisible{}
+}
+
+func (Invisible) Detect(file File) []finding.Finding {
+	findings := make([]finding.Finding, 0)
+
+	for _, observation := range file.Observations {
+		if !unicodeutil.IsInvisible(observation.Rune) {
+			continue
+		}
+
+		name := unicodeutil.InvisibleName(observation.Rune)
+		findings = append(findings, finding.Finding{
+			Path:     file.Path,
+			Line:     observation.Line,
+			Column:   observation.Column,
+			RuleID:   InvisibleRuleID,
+			Severity: finding.SeverityMedium,
+			Message:  fmt.Sprintf("Invisible Unicode character detected: U+%04X %s", observation.Rune, name),
+			Evidence: unicodeutil.RenderRune(observation.Rune),
+		})
+	}
+
+	return findings
+}

@@ -31,9 +31,9 @@ func TestEngineScanFile(t *testing.T) {
 
 	engine := NewEngine()
 
-	got, err := engine.ScanFile(context.Background(), fixturePath("unicode", "multiline.txt"))
+	got, err := engine.ScanRaw(context.Background(), fixturePath("unicode", "multiline.txt"))
 	if err != nil {
-		t.Fatalf("ScanFile() error = %v", err)
+		t.Fatalf("ScanRaw() error = %v", err)
 	}
 
 	if got.Path == "" {
@@ -56,5 +56,24 @@ func TestEngineScanFileNilReceiver(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "scan engine is nil") {
 		t.Fatalf("ScanFile() error = %q, want nil engine error", err.Error())
+	}
+}
+
+func TestEngineScanFileFindings(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("invisible", "all.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 5 {
+		t.Fatalf("len(findings) = %d, want 5", len(findings))
+	}
+
+	if findings[0].RuleID != "unicode/invisible" {
+		t.Fatalf("findings[0].RuleID = %q, want unicode/invisible", findings[0].RuleID)
 	}
 }

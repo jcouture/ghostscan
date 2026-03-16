@@ -18,10 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package unicodeutil
 
-const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
-)
+import "fmt"
+
+func RenderRune(r rune) string {
+	if name := InvisibleName(r); name != "" {
+		return fmt.Sprintf("<U+%04X %s>", r, name)
+	}
+
+	return fmt.Sprintf("<U+%04X>", r)
+}

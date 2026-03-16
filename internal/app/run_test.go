@@ -21,6 +21,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -68,7 +69,7 @@ func TestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := Run(context.Background(), tt.options)
+			_, err := Run(context.Background(), tt.options)
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("Run() error = %v, want nil", err)
@@ -106,12 +107,37 @@ func TestRunUnreadablePath(t *testing.T) {
 	})
 
 	targetPath := filepath.Join(unreadableDir, "child")
-	err := Run(context.Background(), Options{Path: targetPath, Stdout: io.Discard})
+	_, err := Run(context.Background(), Options{Path: targetPath, Stdout: io.Discard})
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
 
 	if !strings.Contains(err.Error(), "permission denied") {
 		t.Fatalf("Run() error = %q, want permission denied", err.Error())
+	}
+}
+
+func TestRunReportsInvisibleFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	findings, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "invisible"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if len(findings) != 9 {
+		t.Fatalf("len(findings) = %d, want 9", len(findings))
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "<U+200B ZERO WIDTH SPACE>") {
+		t.Fatalf("stdout = %q, want rendered evidence", output)
+	}
+	if !strings.Contains(output, "rule: unicode/invisible") {
+		t.Fatalf("stdout = %q, want invisible rule output", output)
 	}
 }

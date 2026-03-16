@@ -47,7 +47,9 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if err := cmd.ExecuteContext(ctx); err != nil {
 		var runErr *runError
 		if errors.As(err, &runErr) {
-			_, _ = fmt.Fprintln(stderr, runErr.err)
+			if !runErr.silent {
+				_, _ = fmt.Fprintln(stderr, runErr.err)
+			}
 			return runErr.code
 		}
 
@@ -71,10 +73,19 @@ func newRootCommand(ctx context.Context) *cobra.Command {
 				path = args[0]
 			}
 
-			if err := app.Run(ctx, app.Options{Path: path, Stdout: cmd.OutOrStdout()}); err != nil {
+			findings, err := app.Run(ctx, app.Options{Path: path, Stdout: cmd.OutOrStdout()})
+			if err != nil {
 				return &runError{
 					code: exitcode.ExecutionError,
 					err:  err,
+				}
+			}
+
+			if len(findings) > 0 {
+				return &runError{
+					code:   exitcode.FindingsDetected,
+					err:    errors.New("findings detected"),
+					silent: true,
 				}
 			}
 
@@ -86,8 +97,9 @@ func newRootCommand(ctx context.Context) *cobra.Command {
 }
 
 type runError struct {
-	code int
-	err  error
+	code   int
+	err    error
+	silent bool
 }
 
 func (e *runError) Error() string {

@@ -18,10 +18,36 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package exitcode
+package report
 
-const (
-	Success          = 0
-	FindingsDetected = 1
-	ExecutionError   = 2
+import (
+	"fmt"
+	"io"
+
+	"github.com/jcouture/ghostscan/internal/finding"
 )
+
+func WriteHuman(w io.Writer, findings []finding.Finding) error {
+	for _, item := range findings {
+		if _, err := fmt.Fprintf(w, "[%s] %s\n", item.Severity, item.Message); err != nil {
+			return fmt.Errorf("write finding header: %w", err)
+		}
+		if _, err := fmt.Fprintf(w, "file: %s\n", item.Path); err != nil {
+			return fmt.Errorf("write finding file: %w", err)
+		}
+		if _, err := fmt.Fprintf(w, "line: %d\n", item.Line); err != nil {
+			return fmt.Errorf("write finding line: %w", err)
+		}
+		if _, err := fmt.Fprintf(w, "column: %d\n", item.Column); err != nil {
+			return fmt.Errorf("write finding column: %w", err)
+		}
+		if _, err := fmt.Fprintf(w, "rule: %s\n", item.RuleID); err != nil {
+			return fmt.Errorf("write finding rule: %w", err)
+		}
+		if _, err := fmt.Fprintf(w, "evidence: %s\n", item.Evidence); err != nil {
+			return fmt.Errorf("write finding evidence: %w", err)
+		}
+	}
+
+	return nil
+}
