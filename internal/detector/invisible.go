@@ -33,13 +33,16 @@ type Invisible struct{}
 
 type File struct {
 	Path         string
+	Text         string
 	Observations []Observation
 }
 
 type Observation struct {
-	Rune   rune
-	Line   int
-	Column int
+	Rune       rune
+	ByteOffset int
+	Line       int
+	Column     int
+	Width      int
 }
 
 func NewInvisible() Invisible {

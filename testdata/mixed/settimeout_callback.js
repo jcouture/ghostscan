@@ -1,0 +1,1 @@
+setTimeout(callback, 100)

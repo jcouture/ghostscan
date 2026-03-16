@@ -1,0 +1,7 @@
+eval(payload)
+new Function("return 1")
+Buffer.from(data)
+atob(data)
+TextDecoder("utf-8")
+setTimeout("alert(1)", 100)
+setTimeout('alert(1)', 100)

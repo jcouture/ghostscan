@@ -56,21 +56,26 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 	observations := make([]detector.Observation, 0, len(fileContext.Observations))
 	for _, observation := range fileContext.Observations {
 		observations = append(observations, detector.Observation{
-			Rune:   observation.Rune,
-			Line:   observation.Line,
-			Column: observation.Column,
+			Rune:       observation.Rune,
+			ByteOffset: observation.ByteOffset,
+			Line:       observation.Line,
+			Column:     observation.Column,
+			Width:      observation.Width,
 		})
 	}
 
 	file := detector.File{
 		Path:         fileContext.Path,
+		Text:         fileContext.Text,
 		Observations: observations,
 	}
 
 	findings := detector.NewInvisible().Detect(file)
 	findings = append(findings, detector.NewPrivateUse().Detect(file)...)
 	findings = append(findings, detector.NewBidi().Detect(file)...)
-	findings = append(findings, detector.NewPayload().Detect(file)...)
+	payloadFindings := detector.NewPayload().Detect(file)
+	findings = append(findings, payloadFindings...)
+	findings = append(findings, detector.CorrelateDecoderPayload(detector.NewDecoder().Detect(file), payloadFindings)...)
 	finding.Sort(findings)
 
 	return findings, nil

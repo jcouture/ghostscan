@@ -381,3 +381,152 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 		})
 	}
 }
+
+func TestEngineScanFileDecoderFixtures(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("mixed", "decoder_patterns.js"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	decoderFindings := make([]struct {
+		line     int
+		column   int
+		message  string
+		evidence string
+	}, 0, 7)
+	for _, item := range findings {
+		if item.RuleID != "unicode/decoder" {
+			continue
+		}
+		decoderFindings = append(decoderFindings, struct {
+			line     int
+			column   int
+			message  string
+			evidence string
+		}{
+			line:     item.Line,
+			column:   item.Column,
+			message:  item.Message,
+			evidence: item.Evidence,
+		})
+
+		if string(item.Severity) != "MEDIUM" {
+			t.Fatalf("decoder severity = %q, want MEDIUM", item.Severity)
+		}
+	}
+
+	want := []struct {
+		line     int
+		column   int
+		message  string
+		evidence string
+	}{
+		{line: 1, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: eval(", evidence: "eval("},
+		{line: 2, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: new Function(", evidence: "new Function("},
+		{line: 3, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: Buffer.from(", evidence: "Buffer.from("},
+		{line: 4, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: atob(", evidence: "atob("},
+		{line: 5, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: TextDecoder(", evidence: "TextDecoder("},
+		{line: 6, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument", evidence: "setTimeout(\"alert(1)\""},
+		{line: 7, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument", evidence: "setTimeout('alert(1)'"},
+	}
+
+	if len(decoderFindings) != len(want) {
+		t.Fatalf("len(decoderFindings) = %d, want %d", len(decoderFindings), len(want))
+	}
+
+	for index := range want {
+		if decoderFindings[index] != want[index] {
+			t.Fatalf("decoderFindings[%d] = %#v, want %#v", index, decoderFindings[index], want[index])
+		}
+	}
+}
+
+func TestEngineScanFileSetTimeoutCallbackIgnored(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("mixed", "settimeout_callback.js"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	for _, item := range findings {
+		if item.RuleID == "unicode/decoder" {
+			t.Fatalf("unexpected decoder finding: %#v", item)
+		}
+	}
+}
+
+func TestEngineScanFileDecoderCorrelation(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	tests := []struct {
+		name         string
+		fixture      string
+		wantSeverity string
+		wantMessage  string
+	}{
+		{
+			name:         "payload within 20 lines",
+			fixture:      "correlated_decoder_near_payload.js",
+			wantSeverity: "HIGH",
+			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
+		},
+		{
+			name:         "payload farther than 20 lines",
+			fixture:      "correlated_decoder_far_payload.js",
+			wantSeverity: "MEDIUM",
+			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval(",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			findings, err := engine.ScanFile(context.Background(), fixturePath("mixed", tt.fixture))
+			if err != nil {
+				t.Fatalf("ScanFile() error = %v", err)
+			}
+
+			var decoderFinding *struct {
+				line     int
+				severity string
+				message  string
+			}
+			for _, item := range findings {
+				if item.RuleID != "unicode/decoder" {
+					continue
+				}
+
+				decoderFinding = &struct {
+					line     int
+					severity string
+					message  string
+				}{
+					line:     item.Line,
+					severity: string(item.Severity),
+					message:  item.Message,
+				}
+				break
+			}
+
+			if decoderFinding == nil {
+				t.Fatal("decoder finding = nil, want finding")
+			}
+			if decoderFinding.severity != tt.wantSeverity {
+				t.Fatalf("decoder severity = %q, want %q", decoderFinding.severity, tt.wantSeverity)
+			}
+			if decoderFinding.message != tt.wantMessage {
+				t.Fatalf("decoder message = %q, want %q", decoderFinding.message, tt.wantMessage)
+			}
+		})
+	}
+}
