@@ -184,6 +184,80 @@ func TestPayloadDetect(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "fragmented invisible payload density",
+			file: File{
+				Path: "testdata/payload/split_density.txt",
+				Observations: append(
+					append(
+						append(
+							repeatObservation('A', 4, 1, 1),
+							repeatObservation('\u200B', 8, 1, 5)...,
+						),
+						append(
+							[]Observation{{Rune: 'x', Line: 1, Column: 13}},
+							repeatObservation('\u200B', 8, 1, 14)...,
+						)...,
+					),
+					[]Observation{
+						{Rune: 'Y', Line: 1, Column: 22},
+						{Rune: 'Z', Line: 1, Column: 23},
+						{Rune: 'Z', Line: 1, Column: 24},
+					}...,
+				),
+			},
+			wantCount: 1,
+			wantFindings: []finding.Finding{
+				{
+					Path:     "testdata/payload/split_density.txt",
+					Line:     1,
+					Column:   1,
+					RuleID:   PayloadRuleID,
+					Severity: finding.SeverityHigh,
+					Message:  "Suspicious encoded payload density detected: 16 suspicious Unicode characters in a 24-character window (invisible)",
+					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8) + "x" + strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8),
+				},
+			},
+		},
+		{
+			name: "fragmented mixed payload classes",
+			file: File{
+				Path: "testdata/payload/mixed_density.txt",
+				Observations: append(
+					append(
+						append(
+							repeatObservation('P', 4, 1, 1),
+							repeatObservation('\u200B', 6, 1, 5)...,
+						),
+						append(
+							[]Observation{{Rune: 'x', Line: 1, Column: 11}},
+							repeatObservation('\uE000', 6, 1, 12)...,
+						)...,
+					),
+					[]Observation{
+						{Rune: 'Q', Line: 1, Column: 18},
+						{Rune: 'Q', Line: 1, Column: 19},
+						{Rune: 'Q', Line: 1, Column: 20},
+						{Rune: 'Q', Line: 1, Column: 21},
+						{Rune: 'Q', Line: 1, Column: 22},
+						{Rune: 'Q', Line: 1, Column: 23},
+						{Rune: 'Q', Line: 1, Column: 24},
+					}...,
+				),
+			},
+			wantCount: 1,
+			wantFindings: []finding.Finding{
+				{
+					Path:     "testdata/payload/mixed_density.txt",
+					Line:     1,
+					Column:   1,
+					RuleID:   PayloadRuleID,
+					Severity: finding.SeverityHigh,
+					Message:  "Suspicious encoded payload density detected: 12 suspicious Unicode characters in a 24-character window (invisible, private-use)",
+					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 6) + "x" + strings.Repeat("<U+E000>", 6),
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

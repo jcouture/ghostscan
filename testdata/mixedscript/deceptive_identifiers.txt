@@ -1,0 +1,3 @@
+const validateUsеr = true
+const pαssword = "secret"
+const обычный = 1

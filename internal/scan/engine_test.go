@@ -180,12 +180,201 @@ func TestEngineScanFileBidiFindings(t *testing.T) {
 	}
 }
 
-func TestEngineScanFileCleanBidiInput(t *testing.T) {
+func TestEngineScanFileBidiFixtureWithoutBidiControls(t *testing.T) {
 	t.Parallel()
 
 	engine := NewEngine()
 
 	findings, err := engine.ScanFile(context.Background(), fixturePath("bidi", "clean.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 1 {
+		t.Fatalf("len(findings) = %d, want 1", len(findings))
+	}
+	if findings[0].RuleID != "unicode/directional-control" {
+		t.Fatalf("findings[0].RuleID = %q, want unicode/directional-control", findings[0].RuleID)
+	}
+	if findings[0].Evidence != "<U+200E LEFT-TO-RIGHT MARK>" {
+		t.Fatalf("findings[0].Evidence = %q, want rendered directional control", findings[0].Evidence)
+	}
+}
+
+func TestEngineScanFileMixedScriptFindings(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("mixedscript", "deceptive_identifiers.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 2 {
+		t.Fatalf("len(findings) = %d, want 2", len(findings))
+	}
+
+	tests := []struct {
+		index        int
+		wantLine     int
+		wantColumn   int
+		wantRuleID   string
+		wantSeverity string
+		wantMessage  string
+		wantEvidence string
+	}{
+		{
+			index:        0,
+			wantLine:     1,
+			wantColumn:   7,
+			wantRuleID:   "unicode/mixed-script",
+			wantSeverity: "HIGH",
+			wantMessage:  "Suspicious mixed-script token detected: token mixes Latin with Cyrillic letters",
+			wantEvidence: "\"validateUsеr\" (е(U+0435 Cyrillic))",
+		},
+		{
+			index:        1,
+			wantLine:     2,
+			wantColumn:   7,
+			wantRuleID:   "unicode/mixed-script",
+			wantSeverity: "HIGH",
+			wantMessage:  "Suspicious mixed-script token detected: token mixes Latin with Greek letters",
+			wantEvidence: "\"pαssword\" (α(U+03B1 Greek))",
+		},
+	}
+
+	for _, tt := range tests {
+		if findings[tt.index].Line != tt.wantLine || findings[tt.index].Column != tt.wantColumn {
+			t.Fatalf(
+				"findings[%d] position = (%d, %d), want (%d, %d)",
+				tt.index,
+				findings[tt.index].Line,
+				findings[tt.index].Column,
+				tt.wantLine,
+				tt.wantColumn,
+			)
+		}
+		if findings[tt.index].RuleID != tt.wantRuleID {
+			t.Fatalf("findings[%d].RuleID = %q, want %q", tt.index, findings[tt.index].RuleID, tt.wantRuleID)
+		}
+		if string(findings[tt.index].Severity) != tt.wantSeverity {
+			t.Fatalf("findings[%d].Severity = %q, want %q", tt.index, findings[tt.index].Severity, tt.wantSeverity)
+		}
+		if findings[tt.index].Message != tt.wantMessage {
+			t.Fatalf("findings[%d].Message = %q, want %q", tt.index, findings[tt.index].Message, tt.wantMessage)
+		}
+		if findings[tt.index].Evidence != tt.wantEvidence {
+			t.Fatalf("findings[%d].Evidence = %q, want %q", tt.index, findings[tt.index].Evidence, tt.wantEvidence)
+		}
+	}
+}
+
+func TestEngineScanFileMixedScriptCleanInput(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("mixedscript", "clean.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 0 {
+		t.Fatalf("len(findings) = %d, want 0", len(findings))
+	}
+}
+
+func TestEngineScanFileCombiningMarkFindings(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("combining", "deceptive_identifiers.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 1 {
+		t.Fatalf("len(findings) = %d, want 1", len(findings))
+	}
+
+	if findings[0].Line != 1 || findings[0].Column != 7 {
+		t.Fatalf("findings[0] position = (%d, %d), want (1, 7)", findings[0].Line, findings[0].Column)
+	}
+	if findings[0].RuleID != "unicode/combining-mark" {
+		t.Fatalf("findings[0].RuleID = %q, want unicode/combining-mark", findings[0].RuleID)
+	}
+	if string(findings[0].Severity) != "MEDIUM" {
+		t.Fatalf("findings[0].Severity = %q, want MEDIUM", findings[0].Severity)
+	}
+	if findings[0].Evidence != "\"café\" (<U+0301>)" {
+		t.Fatalf("findings[0].Evidence = %q, want combining mark evidence", findings[0].Evidence)
+	}
+}
+
+func TestEngineScanFileCombiningMarkCleanInput(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("combining", "clean.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 0 {
+		t.Fatalf("len(findings) = %d, want 0", len(findings))
+	}
+}
+
+func TestEngineScanFileDirectionalControlFindings(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("control", "all.txt"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	if len(findings) != 3 {
+		t.Fatalf("len(findings) = %d, want 3", len(findings))
+	}
+
+	tests := []struct {
+		index        int
+		wantLine     int
+		wantColumn   int
+		wantEvidence string
+	}{
+		{index: 0, wantLine: 1, wantColumn: 2, wantEvidence: "<U+200E LEFT-TO-RIGHT MARK>"},
+		{index: 1, wantLine: 2, wantColumn: 2, wantEvidence: "<U+200F RIGHT-TO-LEFT MARK>"},
+		{index: 2, wantLine: 3, wantColumn: 2, wantEvidence: "<U+061C ARABIC LETTER MARK>"},
+	}
+
+	for _, tt := range tests {
+		if findings[tt.index].Line != tt.wantLine || findings[tt.index].Column != tt.wantColumn {
+			t.Fatalf("findings[%d] position = (%d, %d), want (%d, %d)", tt.index, findings[tt.index].Line, findings[tt.index].Column, tt.wantLine, tt.wantColumn)
+		}
+		if findings[tt.index].RuleID != "unicode/directional-control" {
+			t.Fatalf("findings[%d].RuleID = %q, want unicode/directional-control", tt.index, findings[tt.index].RuleID)
+		}
+		if string(findings[tt.index].Severity) != "HIGH" {
+			t.Fatalf("findings[%d].Severity = %q, want HIGH", tt.index, findings[tt.index].Severity)
+		}
+		if findings[tt.index].Evidence != tt.wantEvidence {
+			t.Fatalf("findings[%d].Evidence = %q, want %q", tt.index, findings[tt.index].Evidence, tt.wantEvidence)
+		}
+	}
+}
+
+func TestEngineScanFileDirectionalControlCleanInput(t *testing.T) {
+	t.Parallel()
+
+	engine := NewEngine()
+
+	findings, err := engine.ScanFile(context.Background(), fixturePath("control", "clean.txt"))
 	if err != nil {
 		t.Fatalf("ScanFile() error = %v", err)
 	}
@@ -325,6 +514,24 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 					column:   4,
 					message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
 					evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
+				},
+			},
+		},
+		{
+			name:      "fragmented payload density",
+			fixture:   "split_density.txt",
+			wantCount: 17,
+			wantFindings: []struct {
+				line     int
+				column   int
+				message  string
+				evidence string
+			}{
+				{
+					line:     1,
+					column:   1,
+					message:  "Suspicious encoded payload density detected: 16 suspicious Unicode characters in a 24-character window (invisible)",
+					evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8) + "x" + strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8),
 				},
 			},
 		},

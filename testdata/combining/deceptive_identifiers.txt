@@ -1,0 +1,2 @@
+const café = "token with combining mark"
+const plain = "safe"

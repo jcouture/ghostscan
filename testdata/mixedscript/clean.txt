@@ -1,0 +1,3 @@
+const validateUser = true
+const password = "secret"
+const обычный = 1

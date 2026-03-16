@@ -18,22 +18,42 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package unicodeutil
+package detector
 
-import "fmt"
+import (
+	"fmt"
 
-func RenderRune(r rune) string {
-	if name := BidiControlName(r); name != "" {
-		return fmt.Sprintf("<U+%04X %s>", r, name)
+	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/internal/unicodeutil"
+)
+
+const ControlRuleID = "unicode/directional-control"
+
+type Control struct{}
+
+func NewControl() Control {
+	return Control{}
+}
+
+func (Control) Detect(file File) []finding.Finding {
+	findings := make([]finding.Finding, 0)
+
+	for _, observation := range file.Observations {
+		if !unicodeutil.IsSuspiciousDirectionalControl(observation.Rune) {
+			continue
+		}
+
+		name := unicodeutil.SuspiciousDirectionalControlName(observation.Rune)
+		findings = append(findings, finding.Finding{
+			Path:     file.Path,
+			Line:     observation.Line,
+			Column:   observation.Column,
+			RuleID:   ControlRuleID,
+			Severity: finding.SeverityHigh,
+			Message:  fmt.Sprintf("Suspicious directional control character detected: U+%04X %s", observation.Rune, name),
+			Evidence: unicodeutil.RenderRune(observation.Rune),
+		})
 	}
 
-	if name := SuspiciousDirectionalControlName(r); name != "" {
-		return fmt.Sprintf("<U+%04X %s>", r, name)
-	}
-
-	if name := InvisibleName(r); name != "" {
-		return fmt.Sprintf("<U+%04X %s>", r, name)
-	}
-
-	return fmt.Sprintf("<U+%04X>", r)
+	return findings
 }

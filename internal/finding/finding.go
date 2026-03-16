@@ -28,4 +28,5 @@ type Finding struct {
 	Severity Severity
 	Message  string
 	Evidence string
+	Context  string
 }

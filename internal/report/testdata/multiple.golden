@@ -4,6 +4,7 @@ line: 2
 column: 4
 rule: unicode/invisible
 evidence: <U+200B ZERO WIDTH SPACE>
+context: let x = "A<U+200B ZERO WIDTH SPACE>B"
 
 [MEDIUM] Private-use Unicode character detected: U+E000
 file: src/a.js
@@ -11,6 +12,7 @@ line: 2
 column: 9
 rule: unicode/private-use
 evidence: <U+E000>
+context: let marker = <U+E000>
 
 [HIGH] Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters
 file: src/b.js
@@ -18,6 +20,7 @@ line: 10
 column: 2
 rule: unicode/payload
 evidence: <U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE>
+context: <U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE>
 
 Summary:
   total findings: 3

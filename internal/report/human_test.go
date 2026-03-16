@@ -55,6 +55,7 @@ func TestHumanReporterGolden(t *testing.T) {
 					Severity: finding.SeverityHigh,
 					Message:  "Trojan Source character detected",
 					Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
+					Context:  "const check = \"abc<U+202E RIGHT-TO-LEFT OVERRIDE>def\"",
 				},
 			},
 			golden: "single.golden",
@@ -70,6 +71,7 @@ func TestHumanReporterGolden(t *testing.T) {
 					Severity: finding.SeverityMedium,
 					Message:  "Invisible Unicode character detected: U+200B ZERO WIDTH SPACE",
 					Evidence: "<U+200B ZERO WIDTH SPACE>",
+					Context:  "let x = \"A<U+200B ZERO WIDTH SPACE>B\"",
 				},
 				{
 					Path:     "src/a.js",
@@ -79,6 +81,7 @@ func TestHumanReporterGolden(t *testing.T) {
 					Severity: finding.SeverityMedium,
 					Message:  "Private-use Unicode character detected: U+E000",
 					Evidence: "<U+E000>",
+					Context:  "let marker = <U+E000>",
 				},
 				{
 					Path:     "src/b.js",
@@ -88,6 +91,7 @@ func TestHumanReporterGolden(t *testing.T) {
 					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
 					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
+					Context:  "<U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE>",
 				},
 			},
 			golden: "multiple.golden",
@@ -131,6 +135,7 @@ func TestHumanReporterWriteError(t *testing.T) {
 			Severity: finding.SeverityHigh,
 			Message:  "Trojan Source character detected",
 			Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
+			Context:  "x<U+202E RIGHT-TO-LEFT OVERRIDE>y",
 		},
 	})
 	if err == nil {

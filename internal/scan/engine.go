@@ -73,9 +73,13 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 	findings := detector.NewInvisible().Detect(file)
 	findings = append(findings, detector.NewPrivateUse().Detect(file)...)
 	findings = append(findings, detector.NewBidi().Detect(file)...)
+	findings = append(findings, detector.NewControl().Detect(file)...)
+	findings = append(findings, detector.NewMixedScript().Detect(file)...)
+	findings = append(findings, detector.NewCombiningMark().Detect(file)...)
 	payloadFindings := detector.NewPayload().Detect(file)
 	findings = append(findings, payloadFindings...)
 	findings = append(findings, detector.CorrelateDecoderPayload(detector.NewDecoder().Detect(file), payloadFindings)...)
+	enrichFindingContexts(fileContext, findings)
 
 	return findings, nil
 }

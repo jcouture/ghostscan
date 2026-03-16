@@ -137,6 +137,9 @@ func TestRunReportsInvisibleFindings(t *testing.T) {
 	if !strings.Contains(output, "<U+200B ZERO WIDTH SPACE>") {
 		t.Fatalf("stdout = %q, want rendered evidence", output)
 	}
+	if !strings.Contains(output, "context: A<U+200B ZERO WIDTH SPACE>B") {
+		t.Fatalf("stdout = %q, want rendered line context", output)
+	}
 	if !strings.Contains(output, "rule: unicode/invisible") {
 		t.Fatalf("stdout = %q, want invisible rule output", output)
 	}
@@ -220,6 +223,118 @@ func TestRunReportsPayloadFindings(t *testing.T) {
 	}
 	if !strings.Contains(output, "evidence: "+strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17)) {
 		t.Fatalf("stdout = %q, want visible payload evidence", output)
+	}
+}
+
+func TestRunReportsFragmentedPayloadDensityFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	result, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "payload", "split_density.txt"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[HIGH] Suspicious encoded payload density detected: 16 suspicious Unicode characters in a 24-character window (invisible)") {
+		t.Fatalf("stdout = %q, want fragmented payload density finding", output)
+	}
+	if !strings.Contains(output, "rule: unicode/payload") {
+		t.Fatalf("stdout = %q, want payload rule output", output)
+	}
+	if !strings.Contains(output, "evidence: "+strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8)+"x"+strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8)) {
+		t.Fatalf("stdout = %q, want fragmented payload evidence", output)
+	}
+}
+
+func TestRunReportsMixedScriptFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	result, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "mixedscript"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[HIGH] Suspicious mixed-script token detected: token mixes Latin with Cyrillic letters") {
+		t.Fatalf("stdout = %q, want mixed-script finding header", output)
+	}
+	if !strings.Contains(output, "rule: unicode/mixed-script") {
+		t.Fatalf("stdout = %q, want mixed-script rule output", output)
+	}
+	if !strings.Contains(output, "evidence: \"validateUsеr\" (е(U+0435 Cyrillic))") {
+		t.Fatalf("stdout = %q, want mixed-script evidence", output)
+	}
+}
+
+func TestRunReportsCombiningMarkFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	result, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "combining"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[MEDIUM] Combining mark detected in token-like text") {
+		t.Fatalf("stdout = %q, want combining mark finding header", output)
+	}
+	if !strings.Contains(output, "rule: unicode/combining-mark") {
+		t.Fatalf("stdout = %q, want combining mark rule output", output)
+	}
+	if !strings.Contains(output, "evidence: \"café\" (<U+0301>)") {
+		t.Fatalf("stdout = %q, want combining mark evidence", output)
+	}
+}
+
+func TestRunReportsDirectionalControlFindings(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	result, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "control"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if !result.HasFindings {
+		t.Fatal("Run() HasFindings = false, want true")
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "[HIGH] Suspicious directional control character detected: U+200E LEFT-TO-RIGHT MARK") {
+		t.Fatalf("stdout = %q, want directional control finding header", output)
+	}
+	if !strings.Contains(output, "rule: unicode/directional-control") {
+		t.Fatalf("stdout = %q, want directional control rule output", output)
+	}
+	if !strings.Contains(output, "evidence: <U+200E LEFT-TO-RIGHT MARK>") {
+		t.Fatalf("stdout = %q, want directional control evidence", output)
 	}
 }
 

@@ -4,6 +4,7 @@ line: 87
 column: 14
 rule: unicode/bidi
 evidence: <U+202E RIGHT-TO-LEFT OVERRIDE>
+context: const check = "abc<U+202E RIGHT-TO-LEFT OVERRIDE>def"
 
 Summary:
   total findings: 1

@@ -117,6 +117,82 @@ func TestIsBidiControl(t *testing.T) {
 	}
 }
 
+func TestIsSuspiciousDirectionalControl(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		r    rune
+		want bool
+	}{
+		{name: "left-to-right mark", r: LeftToRightMark, want: true},
+		{name: "right-to-left mark", r: RightToLeftMark, want: true},
+		{name: "arabic letter mark", r: ArabicLetterMark, want: true},
+		{name: "bidi override is separate detector", r: RightToLeftOverride, want: false},
+		{name: "ascii letter", r: 'A', want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsSuspiciousDirectionalControl(tt.r); got != tt.want {
+				t.Fatalf("IsSuspiciousDirectionalControl(%U) = %v, want %v", tt.r, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsCombiningMark(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		r    rune
+		want bool
+	}{
+		{name: "combining acute accent", r: '\u0301', want: true},
+		{name: "combining enclosing circle", r: '\u20DD', want: true},
+		{name: "letter", r: 'e', want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsCombiningMark(tt.r); got != tt.want {
+				t.Fatalf("IsCombiningMark(%U) = %v, want %v", tt.r, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLetterScript(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		r    rune
+		want Script
+	}{
+		{name: "latin", r: 'A', want: ScriptLatin},
+		{name: "greek", r: 'α', want: ScriptGreek},
+		{name: "cyrillic", r: 'е', want: ScriptCyrillic},
+		{name: "digit", r: '7', want: ScriptNone},
+		{name: "han", r: '字', want: ScriptOther},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := LetterScript(tt.r); got != tt.want {
+				t.Fatalf("LetterScript(%U) = %q, want %q", tt.r, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRenderRune(t *testing.T) {
 	t.Parallel()
 
@@ -127,6 +203,7 @@ func TestRenderRune(t *testing.T) {
 	}{
 		{name: "invisible", r: ZeroWidthSpace, want: "<U+200B ZERO WIDTH SPACE>"},
 		{name: "bidi", r: RightToLeftOverride, want: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+		{name: "directional control", r: LeftToRightMark, want: "<U+200E LEFT-TO-RIGHT MARK>"},
 		{name: "plain", r: '\uE000', want: "<U+E000>"},
 	}
 

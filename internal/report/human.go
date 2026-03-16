@@ -67,6 +67,11 @@ func (r *HumanReporter) Write(findings []finding.Finding) error {
 		if err := r.writer.linef("evidence: %s", item.Evidence); err != nil {
 			return fmt.Errorf("write finding evidence: %w", err)
 		}
+		if item.Context != "" {
+			if err := r.writer.linef("context: %s", item.Context); err != nil {
+				return fmt.Errorf("write finding context: %w", err)
+			}
+		}
 	}
 
 	if len(findings) > 0 {

@@ -20,6 +20,18 @@
 
 package unicodeutil
 
+import "unicode"
+
+type Script string
+
+const (
+	ScriptNone     Script = ""
+	ScriptLatin    Script = "Latin"
+	ScriptGreek    Script = "Greek"
+	ScriptCyrillic Script = "Cyrillic"
+	ScriptOther    Script = "Other"
+)
+
 func IsInvisible(r rune) bool {
 	switch r {
 	case ZeroWidthSpace,
@@ -50,6 +62,17 @@ func IsBidiControl(r rune) bool {
 	}
 }
 
+func IsSuspiciousDirectionalControl(r rune) bool {
+	switch r {
+	case LeftToRightMark,
+		RightToLeftMark,
+		ArabicLetterMark:
+		return true
+	default:
+		return false
+	}
+}
+
 func IsPrivateUse(r rune) bool {
 	switch {
 	case r >= 0xE000 && r <= 0xF8FF:
@@ -60,6 +83,40 @@ func IsPrivateUse(r rune) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func IsCombiningMark(r rune) bool {
+	return unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Mc, r) || unicode.Is(unicode.Me, r)
+}
+
+func LetterScript(r rune) Script {
+	if !unicode.IsLetter(r) {
+		return ScriptNone
+	}
+
+	switch {
+	case unicode.In(r, unicode.Latin):
+		return ScriptLatin
+	case unicode.In(r, unicode.Greek):
+		return ScriptGreek
+	case unicode.In(r, unicode.Cyrillic):
+		return ScriptCyrillic
+	default:
+		return ScriptOther
+	}
+}
+
+func SuspiciousDirectionalControlName(r rune) string {
+	switch r {
+	case LeftToRightMark:
+		return "LEFT-TO-RIGHT MARK"
+	case RightToLeftMark:
+		return "RIGHT-TO-LEFT MARK"
+	case ArabicLetterMark:
+		return "ARABIC LETTER MARK"
+	default:
+		return ""
 	}
 }
 
