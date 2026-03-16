@@ -22,14 +22,12 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/jcouture/ghostscan/internal/app"
 	"github.com/jcouture/ghostscan/internal/exitcode"
-	"github.com/spf13/cobra"
 )
 
 func Execute() int {
@@ -37,75 +35,29 @@ func Execute() int {
 }
 
 func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	cmd := newRootCommand(ctx)
-	cmd.SetOut(stdout)
-	cmd.SetErr(stderr)
-	if args != nil {
-		cmd.SetArgs(args)
+	if args == nil {
+		args = os.Args[1:]
 	}
 
-	if err := cmd.ExecuteContext(ctx); err != nil {
-		var runErr *runError
-		if errors.As(err, &runErr) {
-			if !runErr.silent {
-				_, _ = fmt.Fprintln(stderr, runErr.err)
-			}
-			return runErr.code
-		}
+	if len(args) > 1 {
+		_, _ = fmt.Fprintf(stderr, "accepts at most 1 arg(s), received %d\n", len(args))
+		return exitcode.ExecutionError
+	}
 
+	path := "."
+	if len(args) == 1 {
+		path = args[0]
+	}
+
+	findings, err := app.Run(ctx, app.Options{Path: path, Stdout: stdout})
+	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 		return exitcode.ExecutionError
 	}
 
-	return exitcode.Success
-}
-
-func newRootCommand(ctx context.Context) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:           "ghostscan [path]",
-		Short:         "Discover and scan eligible files under a filesystem path.",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		Args:          cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			path := "."
-			if len(args) == 1 {
-				path = args[0]
-			}
-
-			findings, err := app.Run(ctx, app.Options{Path: path, Stdout: cmd.OutOrStdout()})
-			if err != nil {
-				return &runError{
-					code: exitcode.ExecutionError,
-					err:  err,
-				}
-			}
-
-			if len(findings) > 0 {
-				return &runError{
-					code:   exitcode.FindingsDetected,
-					err:    errors.New("findings detected"),
-					silent: true,
-				}
-			}
-
-			return nil
-		},
+	if len(findings) > 0 {
+		return exitcode.FindingsDetected
 	}
 
-	return cmd
-}
-
-type runError struct {
-	code   int
-	err    error
-	silent bool
-}
-
-func (e *runError) Error() string {
-	return e.err.Error()
-}
-
-func (e *runError) Unwrap() error {
-	return e.err
+	return exitcode.Success
 }
