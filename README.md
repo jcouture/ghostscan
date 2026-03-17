@@ -10,6 +10,12 @@ It is designed for local checks before review, quick spot-checks of downloaded c
 
 ## Getting Started
 
+**Option 1: Download a binary release**
+
+Download a pre-built binary for your platform from the [releases page](https://github.com/jcouture/ghostscan/releases), extract it, and place the binary somewhere on your `PATH`.
+
+**Option 2: Install with Go**
+
 1. Install Go on your machine.
 2. Install `ghostscan`:
 
@@ -17,13 +23,13 @@ It is designed for local checks before review, quick spot-checks of downloaded c
 go install github.com/jcouture/ghostscan@latest
 ```
 
-3. Scan the current folder:
+If your shell cannot find `ghostscan`, make sure your Go `bin` directory is on your `PATH`.
+
+**Then scan the current folder:**
 
 ```bash
 ghostscan .
 ```
-
-If your shell cannot find `ghostscan`, make sure your Go `bin` directory is on your `PATH`.
 
 ## How to Use
 
