@@ -75,6 +75,11 @@ func TestExecute(t *testing.T) {
 			wantCode: exitcode.ExecutionError,
 			wantErr:  "accepts at most 1 arg",
 		},
+		{
+			name:     "print version",
+			args:     []string{"--version"},
+			wantCode: exitcode.Success,
+		},
 	}
 
 	for _, tt := range tests {
@@ -95,6 +100,10 @@ func TestExecute(t *testing.T) {
 				}
 			} else if strings.Contains(stdout.String(), "\x1b[") {
 				t.Fatalf("stdout = %q, want plain text output", stdout.String())
+			}
+
+			if tt.name == "print version" && !strings.Contains(stdout.String(), "ghostscan ") {
+				t.Fatalf("stdout = %q, want version output", stdout.String())
 			}
 
 			if tt.wantErr == "" {

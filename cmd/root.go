@@ -45,11 +45,20 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	var shortNoColor bool
 	var longNoColor bool
+	var shortVersion bool
+	var longVersion bool
 	flags.BoolVar(&shortNoColor, "nc", false, "disable color")
 	flags.BoolVar(&longNoColor, "no-color", false, "disable color")
+	flags.BoolVar(&shortVersion, "v", false, "print version")
+	flags.BoolVar(&longVersion, "version", false, "print version")
 
 	if err := flags.Parse(args); err != nil {
 		return exitcode.ExecutionError
+	}
+
+	if shortVersion || longVersion {
+		_, _ = fmt.Fprintln(stdout, versionString())
+		return exitcode.Success
 	}
 
 	rest := flags.Args()
