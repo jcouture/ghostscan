@@ -30,6 +30,7 @@ import (
 	"github.com/jcouture/ghostscan/internal/finding"
 )
 
+// Keep the window tight enough to feel local in a code review while still catching nearby setup code.
 const correlationDistanceLines = 25
 
 type Options struct {
@@ -265,6 +266,7 @@ func buildFileReport(path string, findings []finding.Finding) fileReport {
 		incidents = append(incidents, buildSingleFindingIncident(item))
 	}
 
+	// Stable incident ordering keeps CI output and golden-style report checks reproducible.
 	sort.SliceStable(incidents, func(i, j int) bool {
 		if incidents[i].startLine != incidents[j].startLine {
 			return incidents[i].startLine < incidents[j].startLine
@@ -319,6 +321,7 @@ func buildSequences(findings []finding.Finding, kind incidentKind) []sequence {
 		return nil
 	}
 
+	// Group contiguous single-rune findings before reporting so long runs do not drown the file summary.
 	sequences := make([]sequence, 0)
 	current := sequenceFromFinding(findings[0], kind)
 

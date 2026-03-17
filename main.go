@@ -27,5 +27,5 @@ import (
 )
 
 func main() {
-	os.Exit(cmd.Execute())
+	os.Exit(cmd.Execute()) // keep main boring
 }

@@ -76,6 +76,7 @@ func Discover(root string) ([]string, error) {
 		}
 
 		if isSymlink(entry.Type()) {
+			// Do not follow links into content outside the requested tree.
 			return nil
 		}
 
@@ -106,6 +107,7 @@ func Discover(root string) ([]string, error) {
 		return nil, walkErr
 	}
 
+	// WalkDir order is filesystem-dependent; sort once so scans stay reproducible.
 	sort.Strings(candidates)
 	return candidates, nil
 }

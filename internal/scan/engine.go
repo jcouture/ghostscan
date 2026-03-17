@@ -70,6 +70,7 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 		Observations: observations,
 	}
 
+	// Keep raw Unicode signals ahead of derived findings so later correlation sees the same inputs.
 	findings := detector.NewInvisible().Detect(file)
 	findings = append(findings, detector.NewPrivateUse().Detect(file)...)
 	findings = append(findings, detector.NewBidi().Detect(file)...)
@@ -78,6 +79,7 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 	findings = append(findings, detector.NewCombiningMark().Detect(file)...)
 	payloadFindings := detector.NewPayload().Detect(file)
 	findings = append(findings, payloadFindings...)
+	// Correlation is derived output; keep it after the payload and decoder passes that feed it.
 	findings = append(findings, detector.CorrelateDecoderPayload(detector.NewDecoder().Detect(file), payloadFindings)...)
 	enrichFindingContexts(fileContext, findings)
 

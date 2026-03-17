@@ -69,8 +69,11 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		findings = append(findings, fileFindings...)
 	}
 
+	// Keep output ordering stable across runs before the report layer groups anything.
 	finding.Sort(findings)
 
+	// We aggregate first so the human report can render a complete summary and file sections.
+	// TODO: stream later only if full-report aggregation becomes the bottleneck in practice.
 	if err := report.WriteHuman(opts.Stdout, findings, report.Options{
 		FilesScanned: len(files),
 		Color:        opts.Color,

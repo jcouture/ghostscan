@@ -63,7 +63,7 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	rest := flags.Args()
 	if len(rest) > 1 {
-		_, _ = fmt.Fprintf(stderr, "accepts at most 1 arg(s), received %d\n", len(rest))
+		_, _ = fmt.Fprintf(stderr, "accepts at most 1 path, got %d\n", len(rest))
 		return exitcode.ExecutionError
 	}
 

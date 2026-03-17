@@ -73,7 +73,7 @@ func TestExecute(t *testing.T) {
 			name:     "too many args",
 			args:     []string{tempDir, tempDir},
 			wantCode: exitcode.ExecutionError,
-			wantErr:  "accepts at most 1 arg",
+			wantErr:  "accepts at most 1 path",
 		},
 		{
 			name:     "print version",
