@@ -1,6 +1,10 @@
 APP ?= ghostscan
+MODULE ?= github.com/jcouture/ghostscan
+VERSION_PKG ?= $(MODULE)/cmd
 BIN_DIR ?= bin
 BIN ?= $(BIN_DIR)/$(APP)
+GORELEASER ?= go run github.com/goreleaser/goreleaser/v2@v2.12.7
+SVU ?= go run github.com/caarlos0/svu/v3@v3.2.2
 
 GOFLAGS ?= -trimpath -buildvcs=false
 GOCACHE_DIR ?= $(CURDIR)/.gocache
@@ -8,12 +12,13 @@ export GOCACHE := $(GOCACHE_DIR)
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS ?= -X main.Version=$(VERSION)
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+LDFLAGS ?= -X $(VERSION_PKG).Version=$(VERSION) -X $(VERSION_PKG).Commit=$(COMMIT)
 BUILD_FLAGS ?= $(strip $(if $(LDFLAGS),-ldflags "$(LDFLAGS)"))
 
 TEST_PKGS ?= ./...
 
-.PHONY: build clean help fmt fix vet gosec vulncheck tidy precommit test install uninstall
+.PHONY: build clean help fmt fix vet gosec vulncheck tidy precommit test install uninstall release-snapshot tag print-version
 
 .DEFAULT_GOAL := help
 
@@ -32,6 +37,10 @@ build:
 install:
 	@CGO_ENABLED=0 go install $(GOFLAGS) $(BUILD_FLAGS) .
 	@echo "Installed $(APP) to $$(go env GOPATH)/bin"
+
+## Print the computed release version
+print-version:
+	@printf '%s\n' "$(VERSION)"
 
 ## Uninstall from GOPATH/bin
 uninstall:
@@ -76,6 +85,18 @@ tidy:
 ## Pre-commit checks (writes fmt/tidy)
 precommit: fmt fix tidy vet gosec vulncheck test
 	@echo "Pre-commit checks passed"
+
+## Build release artifacts locally without publishing
+release-snapshot:
+	@$(GORELEASER) release --snapshot --clean
+	@echo "Snapshot artifacts written to dist/"
+
+## Create an annotated semver tag (override with VERSION=vX.Y.Z)
+tag:
+	@VERSION="$${VERSION:-$$($(SVU) next)}"; \
+	echo "Creating tag $$VERSION"; \
+	git tag -a "$$VERSION" -s -m "Release $$VERSION"; \
+	echo "Created $$VERSION"
 
 ## Clean build artifacts
 clean:

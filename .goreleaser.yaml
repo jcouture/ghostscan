@@ -1,0 +1,58 @@
+version: 2
+
+project_name: ghostscan
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: ghostscan
+    main: .
+    binary: ghostscan
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/jcouture/ghostscan/cmd.Version={{ .Version }}
+        -X github.com/jcouture/ghostscan/cmd.Commit={{ .Commit }}
+
+archives:
+  - id: default
+    ids:
+      - ghostscan
+    files:
+      - LICENSE
+      - README.md
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: jcouture
+    name: ghostscan

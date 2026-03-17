@@ -99,3 +99,34 @@ No. It only performs static checks on file contents.
 **Can I scan a single file instead of a whole repository?**
 
 Yes. Pass the file path directly to `ghostscan`.
+
+## Release Process
+
+The repository includes a tag-driven release flow:
+
+1. Make sure the worktree is clean and tests pass.
+2. Create the next semver tag:
+
+```bash
+make tag
+```
+
+You can override the version explicitly if needed:
+
+```bash
+make tag VERSION=v0.1.0
+```
+
+3. Push the new tag:
+
+```bash
+git push origin v0.1.0
+```
+
+Pushing a `v*.*.*` tag triggers GitHub Actions, which runs GoReleaser and publishes release archives plus checksums to GitHub Releases.
+
+To verify the release config locally without publishing:
+
+```bash
+make release-snapshot
+```
