@@ -92,6 +92,14 @@ The scan could not complete. Common causes are an invalid path or a file access 
 
 `ghostscan` skips symlinks, binary files, very large files, and common build or dependency folders to keep scans safe and focused.
 
+**I downloaded `ghostscan` on macOS and it is blocked by quarantine. What should I do?**
+
+If you downloaded the `ghostscan` binary directly on macOS and Gatekeeper blocks it, remove the quarantine attribute from the binary:
+
+```bash
+xattr -d com.apple.quarantine ghostscan
+```
+
 **Does `ghostscan` run or decode the code it scans?**
 
 No. It only performs static checks on file contents.
