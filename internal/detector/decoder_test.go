@@ -21,6 +21,7 @@
 package detector
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jcouture/ghostscan/internal/finding"
@@ -129,7 +130,7 @@ func TestDecoderDetectSetTimeoutCallbackIgnored(t *testing.T) {
 	}
 }
 
-func TestCorrelateDecoderPayload(t *testing.T) {
+func TestCorrelateFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -144,14 +145,14 @@ func TestCorrelateDecoderPayload(t *testing.T) {
 			payloadLine:  5,
 			decoderLine:  24,
 			wantSeverity: finding.SeverityHigh,
-			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
+			wantMessage:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 19 lines of eval(",
 		},
 		{
-			name:         "payload within 25 lines",
+			name:         "payload within 20 lines",
 			payloadLine:  1,
-			decoderLine:  23,
+			decoderLine:  20,
 			wantSeverity: finding.SeverityHigh,
-			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
+			wantMessage:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 19 lines of eval(",
 		},
 	}
 
@@ -159,7 +160,7 @@ func TestCorrelateDecoderPayload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			decoderFindings := []finding.Finding{{
+			findings := []finding.Finding{{
 				Path:     "testdata/mixed/correlated.js",
 				Line:     tt.decoderLine,
 				Column:   1,
@@ -167,8 +168,7 @@ func TestCorrelateDecoderPayload(t *testing.T) {
 				Severity: finding.SeverityMedium,
 				Message:  "Suspicious decoder or dynamic execution pattern detected: eval(",
 				Evidence: "eval(",
-			}}
-			payloadFindings := []finding.Finding{{
+			}, {
 				Path:     "testdata/mixed/correlated.js",
 				Line:     tt.payloadLine,
 				Column:   3,
@@ -178,12 +178,15 @@ func TestCorrelateDecoderPayload(t *testing.T) {
 				Evidence: "<U+200B ZERO WIDTH SPACE>",
 			}}
 
-			got := CorrelateDecoderPayload(decoderFindings, payloadFindings)
+			got := CorrelateFile(findings)
 			if len(got) != 1 {
 				t.Fatalf("len(findings) = %d, want 1", len(got))
 			}
 			if got[0].Severity != tt.wantSeverity {
 				t.Fatalf("Severity = %q, want %q", got[0].Severity, tt.wantSeverity)
+			}
+			if got[0].RuleID != CorrelationRuleID {
+				t.Fatalf("RuleID = %q, want %q", got[0].RuleID, CorrelationRuleID)
 			}
 			if got[0].Message != tt.wantMessage {
 				t.Fatalf("Message = %q, want %q", got[0].Message, tt.wantMessage)
@@ -218,5 +221,127 @@ func testFileFromText(path, text string) File {
 		Path:         path,
 		Text:         text,
 		Observations: observations,
+		Prepass: Prepass{
+			DecoderMarkers: decoderMarkersForTest(text, observations),
+		},
+	}
+}
+
+func decoderMarkersForTest(text string, observations []Observation) []DecoderMarker {
+	markers := make([]DecoderMarker, 0)
+
+	patterns := []struct {
+		marker  string
+		message string
+	}{
+		{marker: "eval(", message: "Suspicious decoder or dynamic execution pattern detected: eval("},
+		{marker: "new Function(", message: "Suspicious decoder or dynamic execution pattern detected: new Function("},
+		{marker: "Buffer.from(", message: "Suspicious decoder or dynamic execution pattern detected: Buffer.from("},
+		{marker: "atob(", message: "Suspicious decoder or dynamic execution pattern detected: atob("},
+		{marker: "TextDecoder(", message: "Suspicious decoder or dynamic execution pattern detected: TextDecoder("},
+	}
+
+	for _, pattern := range patterns {
+		for _, offset := range findAllOffsetsForTest(text, pattern.marker) {
+			observation, ok := observationAtOffsetForTest(observations, offset)
+			if !ok {
+				continue
+			}
+			markers = append(markers, DecoderMarker{
+				Marker:   pattern.marker,
+				Message:  pattern.message,
+				Line:     observation.Line,
+				Column:   observation.Column,
+				Offset:   offset,
+				Evidence: pattern.marker,
+			})
+		}
+	}
+
+	if quoted, ok := extractQuotedSetTimeoutArgumentForTest(text); ok {
+		markers = append(markers, DecoderMarker{
+			Marker:   "setTimeout(",
+			Message:  "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument",
+			Line:     1,
+			Column:   1,
+			Offset:   0,
+			Evidence: quoted,
+		})
+	}
+
+	return markers
+}
+
+func findAllOffsetsForTest(text, marker string) []int {
+	offsets := make([]int, 0)
+	for start := 0; start < len(text); {
+		relative := strings.Index(text[start:], marker)
+		if relative == -1 {
+			return offsets
+		}
+		offset := start + relative
+		offsets = append(offsets, offset)
+		start = offset + len(marker)
+	}
+	return offsets
+}
+
+func observationAtOffsetForTest(observations []Observation, offset int) (Observation, bool) {
+	for _, observation := range observations {
+		if observation.ByteOffset == offset {
+			return observation, true
+		}
+	}
+	return Observation{}, false
+}
+
+func extractQuotedSetTimeoutArgumentForTest(text string) (string, bool) {
+	const marker = "setTimeout("
+
+	start := len(marker)
+	for start < len(text) && isASCIIWhitespaceForTest(text[start]) {
+		start++
+	}
+	if start >= len(text) {
+		return "", false
+	}
+
+	quote := text[start]
+	if quote != '"' && quote != '\'' {
+		return "", false
+	}
+
+	end := start + 1
+	escaped := false
+	for end < len(text) {
+		ch := text[end]
+		if ch == '\n' || ch == '\r' {
+			return "", false
+		}
+		if escaped {
+			escaped = false
+			end++
+			continue
+		}
+		if ch == '\\' {
+			escaped = true
+			end++
+			continue
+		}
+		if ch == quote {
+			return text[:end+1], true
+		}
+		end++
+	}
+
+	return "", false
+}
+
+func isASCIIWhitespaceForTest(ch byte) bool {
+	switch ch {
+	case ' ', '\t', '\n', '\r':
+		return true
+	default:
+		return false
 	}
 }

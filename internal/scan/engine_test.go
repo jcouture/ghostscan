@@ -69,12 +69,15 @@ func TestEngineScanFileFindings(t *testing.T) {
 		t.Fatalf("ScanFile() error = %v", err)
 	}
 
-	if len(findings) != 5 {
-		t.Fatalf("len(findings) = %d, want 5", len(findings))
+	if len(findings) != 1 {
+		t.Fatalf("len(findings) = %d, want 1", len(findings))
 	}
 
 	if findings[0].RuleID != "unicode/invisible" {
 		t.Fatalf("findings[0].RuleID = %q, want unicode/invisible", findings[0].RuleID)
+	}
+	if findings[0].Evidence != "<U+200B ZERO WIDTH SPACE><U+200C ZERO WIDTH NON-JOINER><U+200D ZERO WIDTH JOINER><U+2060 WORD JOINER><U+FEFF ZERO WIDTH NO-BREAK SPACE>" {
+		t.Fatalf("findings[0].Evidence = %q, want grouped evidence", findings[0].Evidence)
 	}
 }
 
@@ -408,17 +411,17 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 		{
 			name:      "invisible short fixture",
 			fixture:   "invisible_short.txt",
-			wantCount: 16,
+			wantCount: 1,
 		},
 		{
 			name:      "private use short fixture",
 			fixture:   "privateuse_short.txt",
-			wantCount: 16,
+			wantCount: 1,
 		},
 		{
 			name:      "invisible payload run",
 			fixture:   "invisible_long.txt",
-			wantCount: 18,
+			wantCount: 2,
 			wantFindings: []struct {
 				line     int
 				column   int
@@ -436,7 +439,7 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 		{
 			name:      "private use payload run",
 			fixture:   "privateuse_long.txt",
-			wantCount: 18,
+			wantCount: 2,
 			wantFindings: []struct {
 				line     int
 				column   int
@@ -454,7 +457,7 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 		{
 			name:      "two payload runs",
 			fixture:   "two_runs.txt",
-			wantCount: 36,
+			wantCount: 4,
 			wantFindings: []struct {
 				line     int
 				column   int
@@ -478,7 +481,7 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 		{
 			name:      "mixed payload classes",
 			fixture:   "mixed_runs.txt",
-			wantCount: 36,
+			wantCount: 4,
 			wantFindings: []struct {
 				line     int
 				column   int
@@ -502,7 +505,7 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 		{
 			name:      "multiline payload start position",
 			fixture:   "multiline_start.txt",
-			wantCount: 18,
+			wantCount: 2,
 			wantFindings: []struct {
 				line     int
 				column   int
@@ -520,7 +523,7 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 		{
 			name:      "fragmented payload density",
 			fixture:   "split_density.txt",
-			wantCount: 17,
+			wantCount: 3,
 			wantFindings: []struct {
 				line     int
 				column   int
@@ -681,16 +684,16 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 		wantMessage  string
 	}{
 		{
-			name:         "payload within 25 lines",
+			name:         "payload within 20 lines",
 			fixture:      "correlated_decoder_near_payload.js",
 			wantSeverity: "HIGH",
-			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
+			wantMessage:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 20 lines of eval(",
 		},
 		{
-			name:         "payload within 25 lines for far fixture",
+			name:         "payload outside correlation window for far fixture",
 			fixture:      "correlated_decoder_far_payload.js",
-			wantSeverity: "HIGH",
-			wantMessage:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
+			wantSeverity: "",
+			wantMessage:  "",
 		},
 	}
 
@@ -703,17 +706,17 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 				t.Fatalf("ScanFile() error = %v", err)
 			}
 
-			var decoderFinding *struct {
+			var correlationFinding *struct {
 				line     int
 				severity string
 				message  string
 			}
 			for _, item := range findings {
-				if item.RuleID != "unicode/decoder" {
+				if item.RuleID != "unicode/correlation" {
 					continue
 				}
 
-				decoderFinding = &struct {
+				correlationFinding = &struct {
 					line     int
 					severity string
 					message  string
@@ -725,14 +728,20 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 				break
 			}
 
-			if decoderFinding == nil {
-				t.Fatal("decoder finding = nil, want finding")
+			if tt.wantSeverity == "" {
+				if correlationFinding != nil {
+					t.Fatalf("correlation finding = %#v, want none", correlationFinding)
+				}
+				return
 			}
-			if decoderFinding.severity != tt.wantSeverity {
-				t.Fatalf("decoder severity = %q, want %q", decoderFinding.severity, tt.wantSeverity)
+			if correlationFinding == nil {
+				t.Fatal("correlation finding = nil, want finding")
 			}
-			if decoderFinding.message != tt.wantMessage {
-				t.Fatalf("decoder message = %q, want %q", decoderFinding.message, tt.wantMessage)
+			if correlationFinding.severity != tt.wantSeverity {
+				t.Fatalf("correlation severity = %q, want %q", correlationFinding.severity, tt.wantSeverity)
+			}
+			if correlationFinding.message != tt.wantMessage {
+				t.Fatalf("correlation message = %q, want %q", correlationFinding.message, tt.wantMessage)
 			}
 		})
 	}

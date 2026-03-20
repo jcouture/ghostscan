@@ -27,6 +27,7 @@ type Context struct {
 	LineStarts   []int
 	Observations []Observation
 	InvalidUTF8  bool
+	Prepass      Prepass
 }
 
 type Observation struct {
@@ -35,4 +36,29 @@ type Observation struct {
 	Line       int
 	Column     int
 	Width      int
+}
+
+type Prepass struct {
+	Ready                bool
+	HasInvisible         bool
+	HasPrivateUse        bool
+	HasBidi              bool
+	HasDirectional       bool
+	InvisibleCount       int
+	PrivateUseCount      int
+	BidiCount            int
+	DirectionalCount     int
+	LongestInvisibleRun  int
+	LongestPrivateUseRun int
+	DecoderMarkers       []Marker
+}
+
+type Marker struct {
+	Kind     string
+	Marker   string
+	Message  string
+	Line     int
+	Column   int
+	Offset   int
+	Evidence string
 }

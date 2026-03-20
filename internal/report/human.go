@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jcouture/ghostscan/internal/finding"
 )
@@ -36,6 +37,24 @@ const correlationDistanceLines = 25
 type Options struct {
 	FilesScanned int
 	Color        bool
+	Verbose      bool
+	Runtime      RuntimeStats
+}
+
+type RuntimeStats struct {
+	WalkDuration          time.Duration
+	ScanDuration          time.Duration
+	FilesDiscovered       int
+	FilesScanned          int
+	BytesScanned          int64
+	RecoverableFileErrors int
+	SkippedByReason       []Count
+	FindingsByRule        []Count
+}
+
+type Count struct {
+	Label string
+	Value int
 }
 
 type HumanReporter struct {
@@ -54,6 +73,8 @@ type summary struct {
 	filesWithFindings int
 	severityCounts    []severityCount
 	topConcerns       []topConcern
+	runtime           RuntimeStats
+	verbose           bool
 }
 
 type severityCount struct {
@@ -148,7 +169,7 @@ func buildReport(findings []finding.Finding, opts Options) reportModel {
 	incidents := buildFileReports(files)
 	return reportModel{
 		files:   incidents,
-		summary: summarize(incidents, opts.FilesScanned),
+		summary: summarize(incidents, opts),
 	}
 }
 
@@ -176,17 +197,20 @@ func buildFileReports(grouped map[string][]finding.Finding) []fileReport {
 
 func buildFileReport(path string, findings []finding.Finding) fileReport {
 	var (
-		bidiFindings      []finding.Finding
-		controlFindings   []finding.Finding
-		invisibleFindings []finding.Finding
-		privateFindings   []finding.Finding
-		payloadFindings   []finding.Finding
-		decoderFindings   []finding.Finding
-		otherFindings     []finding.Finding
+		correlationFindings []finding.Finding
+		bidiFindings        []finding.Finding
+		controlFindings     []finding.Finding
+		invisibleFindings   []finding.Finding
+		privateFindings     []finding.Finding
+		payloadFindings     []finding.Finding
+		decoderFindings     []finding.Finding
+		otherFindings       []finding.Finding
 	)
 
 	for _, item := range findings {
 		switch item.RuleID {
+		case "unicode/correlation":
+			correlationFindings = append(correlationFindings, item)
 		case "unicode/bidi":
 			bidiFindings = append(bidiFindings, item)
 		case "unicode/directional-control":
@@ -206,18 +230,23 @@ func buildFileReport(path string, findings []finding.Finding) fileReport {
 
 	invisibleRuns := buildSequences(invisibleFindings, incidentInvisible)
 	privateRuns := buildSequences(privateFindings, incidentPrivateUse)
-	correlated, usedPayload, usedDecoder := buildCorrelationIncidents(payloadFindings, decoderFindings, invisibleRuns, privateRuns)
 
-	incidents := make([]incident, 0, len(correlated)+len(payloadFindings)+len(invisibleRuns)+len(privateRuns)+len(otherFindings)+2)
+	correlated, usedPayload, usedDecoder := buildCorrelationIncidents(payloadFindings, decoderFindings, invisibleRuns, privateRuns)
+	if len(correlated) == 0 {
+		for _, item := range correlationFindings {
+			correlated = append(correlated, buildSingleFindingIncident(item))
+		}
+	}
+
+	incidents := make([]incident, 0, len(findings))
 	incidents = append(incidents, correlated...)
 
 	for index, item := range payloadFindings {
 		if usedPayload[index] {
 			continue
 		}
-		incidents = append(incidents, buildPayloadIncident(item, invisibleRuns, privateRuns))
+		incidents = append(incidents, buildPayloadIncident(item))
 	}
-
 	for _, run := range invisibleRuns {
 		if !run.suppressed {
 			incidents = append(incidents, buildSequenceIncident(run))
@@ -321,45 +350,44 @@ func buildSequences(findings []finding.Finding, kind incidentKind) []sequence {
 		return nil
 	}
 
-	// Group contiguous single-rune findings before reporting so long runs do not drown the file summary.
 	sequences := make([]sequence, 0)
 	current := sequenceFromFinding(findings[0], kind)
-
 	for _, item := range findings[1:] {
-		if item.Line == current.endLine && item.Column == current.endCol+1 {
-			current.endCol = item.Column
-			current.length++
-			current.evidence = mergeEvidence(current.evidence, item.Evidence)
+		next := sequenceFromFinding(item, kind)
+		if next.startLine == current.endLine && next.startCol == current.endCol+1 {
+			current.endLine = next.endLine
+			current.endCol = next.endCol
+			current.length += next.length
+			current.evidence += next.evidence
 			continue
 		}
-
 		sequences = append(sequences, current)
-		current = sequenceFromFinding(item, kind)
+		current = next
 	}
-
 	sequences = append(sequences, current)
 	return sequences
 }
 
 func sequenceFromFinding(item finding.Finding, kind incidentKind) sequence {
+	endLine := item.EndLine
+	endCol := item.EndColumn
+	if endLine == 0 {
+		endLine = item.Line
+	}
+	if endCol == 0 {
+		endCol = max(item.Column+payloadEvidenceLength(item.Evidence)-1, item.Column)
+	}
 	return sequence{
 		kind:      kind,
 		ruleID:    item.RuleID,
 		severity:  item.Severity,
 		startLine: item.Line,
 		startCol:  item.Column,
-		endLine:   item.Line,
-		endCol:    item.Column,
-		length:    1,
+		endLine:   endLine,
+		endCol:    endCol,
+		length:    payloadEvidenceLength(item.Evidence),
 		evidence:  item.Evidence,
 	}
-}
-
-func mergeEvidence(left, right string) string {
-	if left == "" {
-		return right
-	}
-	return left + right
 }
 
 func buildCorrelationIncidents(payloads, decoders []finding.Finding, invisibleRuns, privateRuns []sequence) ([]incident, []bool, []bool) {
@@ -462,19 +490,7 @@ func nearbyDecoderIndexes(payload finding.Finding, decoders []finding.Finding) [
 	return indexes
 }
 
-func buildPayloadIncident(payload finding.Finding, invisibleRuns, privateRuns []sequence) incident {
-	support := payloadSupportObservation(payload, invisibleRuns, privateRuns)
-	for index := range invisibleRuns {
-		if overlapsPayload(invisibleRuns[index], payload) {
-			invisibleRuns[index].suppressed = true
-		}
-	}
-	for index := range privateRuns {
-		if overlapsPayload(privateRuns[index], payload) {
-			privateRuns[index].suppressed = true
-		}
-	}
-
+func buildPayloadIncident(payload finding.Finding) incident {
 	details := []string{
 		fmt.Sprintf("payload: %s", collapseEvidence(payload.Evidence)),
 	}
@@ -497,10 +513,7 @@ func buildPayloadIncident(payload finding.Finding, invisibleRuns, privateRuns []
 		endCol:    payloadEndColumn(payload),
 		why:       why,
 		evidence:  details,
-		supporting: []supportObservation{
-			support,
-		},
-		sortRank: 3,
+		sortRank:  3,
 	}
 }
 
@@ -559,6 +572,9 @@ func overlapsPayload(run sequence, payload finding.Finding) bool {
 }
 
 func payloadEndColumn(payload finding.Finding) int {
+	if payload.EndColumn > 0 {
+		return payload.EndColumn
+	}
 	length := payloadEvidenceLength(payload.Evidence)
 	if length <= 1 {
 		return payload.Column
@@ -641,8 +657,8 @@ func buildSingleFindingIncident(item finding.Finding) incident {
 		severity:  item.Severity,
 		startLine: item.Line,
 		startCol:  item.Column,
-		endLine:   item.Line,
-		endCol:    item.Column,
+		endLine:   maxInt(item.EndLine, item.Line),
+		endCol:    maxInt(item.EndColumn, item.Column),
 		why:       why,
 		evidence: []string{
 			fmt.Sprintf("evidence: %s", collapseEvidence(item.Evidence)),
@@ -651,8 +667,20 @@ func buildSingleFindingIncident(item finding.Finding) incident {
 	}
 }
 
+func maxInt(values ...int) int {
+	best := 0
+	for _, value := range values {
+		if value > best {
+			best = value
+		}
+	}
+	return best
+}
+
 func ruleIncidentKind(ruleID string) incidentKind {
 	switch ruleID {
+	case "unicode/correlation":
+		return incidentCorrelation
 	case "unicode/decoder":
 		return incidentDecoder
 	case "unicode/mixed-script":
@@ -666,6 +694,8 @@ func ruleIncidentKind(ruleID string) incidentKind {
 
 func defaultWhy(ruleID string) string {
 	switch ruleID {
+	case "unicode/correlation":
+		return "Hidden Unicode payloads near decoder or dynamic execution markers are higher-confidence runtime obfuscation signals."
 	case "unicode/decoder":
 		return "Decoder and dynamic execution patterns often appear when hidden content is decoded or executed at runtime."
 	case "unicode/mixed-script":
@@ -679,6 +709,8 @@ func defaultWhy(ruleID string) string {
 
 func singleFindingRank(ruleID string) int {
 	switch ruleID {
+	case "unicode/correlation":
+		return 0
 	case "unicode/decoder":
 		return 2
 	case "unicode/mixed-script":
@@ -761,7 +793,8 @@ func collapseEvidence(evidence string) string {
 	return builder.String()
 }
 
-func summarize(files []fileReport, filesScanned int) summary {
+func summarize(files []fileReport, opts Options) summary {
+	filesScanned := opts.FilesScanned
 	if filesScanned == 0 {
 		filesScanned = len(files)
 	}
@@ -816,6 +849,8 @@ func summarize(files []fileReport, filesScanned int) summary {
 		filesWithFindings: len(files),
 		severityCounts:    severityCounts,
 		topConcerns:       top,
+		runtime:           opts.Runtime,
+		verbose:           opts.Verbose,
 	}
 }
 
@@ -884,18 +919,69 @@ func (r *HumanReporter) writeHeader(s summary) error {
 	}
 
 	if len(s.topConcerns) == 0 {
+		if !s.verbose {
+			return nil
+		}
+	} else {
+		if err := r.writer.blankLine(); err != nil {
+			return err
+		}
+		if err := r.writer.linef("%s:", r.palette.bold("Top concerns")); err != nil {
+			return err
+		}
+		for index, item := range s.topConcerns {
+			if err := r.writer.linef("  %d. %s in %d file%s", index+1, item.label, item.files, pluralSuffix(item.files)); err != nil {
+				return err
+			}
+		}
+	}
+
+	if !s.verbose {
 		return nil
 	}
 
 	if err := r.writer.blankLine(); err != nil {
 		return err
 	}
-	if err := r.writer.linef("%s:", r.palette.bold("Top concerns")); err != nil {
+	if err := r.writer.linef("%s:", r.palette.bold("Runtime")); err != nil {
 		return err
 	}
-	for index, item := range s.topConcerns {
-		if err := r.writer.linef("  %d. %s in %d file%s", index+1, item.label, item.files, pluralSuffix(item.files)); err != nil {
+	if err := r.writer.linef("  files discovered: %d", s.runtime.FilesDiscovered); err != nil {
+		return err
+	}
+	if err := r.writer.linef("  files scanned: %d", s.runtime.FilesScanned); err != nil {
+		return err
+	}
+	if err := r.writer.linef("  bytes scanned: %d", s.runtime.BytesScanned); err != nil {
+		return err
+	}
+	if err := r.writer.linef("  walk duration: %s", s.runtime.WalkDuration.Round(time.Millisecond)); err != nil {
+		return err
+	}
+	if err := r.writer.linef("  scan duration: %s", s.runtime.ScanDuration.Round(time.Millisecond)); err != nil {
+		return err
+	}
+	if err := r.writer.linef("  recoverable file errors: %d", s.runtime.RecoverableFileErrors); err != nil {
+		return err
+	}
+	if len(s.runtime.SkippedByReason) > 0 {
+		if err := r.writer.linef("  skipped by reason:"); err != nil {
 			return err
+		}
+		for _, item := range s.runtime.SkippedByReason {
+			if err := r.writer.linef("    %s: %d", item.Label, item.Value); err != nil {
+				return err
+			}
+		}
+	}
+	if len(s.runtime.FindingsByRule) > 0 {
+		if err := r.writer.linef("  findings by rule:"); err != nil {
+			return err
+		}
+		for _, item := range s.runtime.FindingsByRule {
+			if err := r.writer.linef("    %s: %d", item.Label, item.Value); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -36,6 +36,10 @@ func NewControl() Control {
 }
 
 func (Control) Detect(file File) []finding.Finding {
+	if file.Prepass.Ready && !file.Prepass.HasDirectional {
+		return nil
+	}
+
 	findings := make([]finding.Finding, 0)
 
 	for _, observation := range file.Observations {
@@ -45,13 +49,15 @@ func (Control) Detect(file File) []finding.Finding {
 
 		name := unicodeutil.SuspiciousDirectionalControlName(observation.Rune)
 		findings = append(findings, finding.Finding{
-			Path:     file.Path,
-			Line:     observation.Line,
-			Column:   observation.Column,
-			RuleID:   ControlRuleID,
-			Severity: finding.SeverityHigh,
-			Message:  fmt.Sprintf("Suspicious directional control character detected: U+%04X %s", observation.Rune, name),
-			Evidence: unicodeutil.RenderRune(observation.Rune),
+			Path:      file.Path,
+			Line:      observation.Line,
+			Column:    observation.Column,
+			EndLine:   observation.Line,
+			EndColumn: observation.Column,
+			RuleID:    ControlRuleID,
+			Severity:  finding.SeverityHigh,
+			Message:   fmt.Sprintf("Suspicious directional control character detected: U+%04X %s", observation.Rune, name),
+			Evidence:  unicodeutil.RenderRune(observation.Rune),
 		})
 	}
 

@@ -55,7 +55,7 @@ func TestPrivateUseDetectMultipleRanges(t *testing.T) {
 		"testdata/privateuse/all.txt",
 		1,
 		2,
-		"Private Use Area Unicode character detected: U+E000",
+		"Private-use Unicode sequence detected: <U+E000>",
 		"<U+E000>",
 	)
 	assertPrivateUseFinding(
@@ -64,7 +64,7 @@ func TestPrivateUseDetectMultipleRanges(t *testing.T) {
 		"testdata/privateuse/all.txt",
 		2,
 		2,
-		"Private Use Area Unicode character detected: U+F0000",
+		"Private-use Unicode sequence detected: <U+F0000>",
 		"<U+F0000>",
 	)
 	assertPrivateUseFinding(
@@ -73,7 +73,7 @@ func TestPrivateUseDetectMultipleRanges(t *testing.T) {
 		"testdata/privateuse/all.txt",
 		3,
 		2,
-		"Private Use Area Unicode character detected: U+100000",
+		"Private-use Unicode sequence detected: <U+100000>",
 		"<U+100000>",
 	)
 }

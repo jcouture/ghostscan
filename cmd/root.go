@@ -47,10 +47,12 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var longNoColor bool
 	var shortVersion bool
 	var longVersion bool
+	var verbose bool
 	flags.BoolVar(&shortNoColor, "nc", false, "disable color")
 	flags.BoolVar(&longNoColor, "no-color", false, "disable color")
 	flags.BoolVar(&shortVersion, "v", false, "print version")
 	flags.BoolVar(&longVersion, "version", false, "print version")
+	flags.BoolVar(&verbose, "verbose", false, "print scan summary details")
 
 	if err := flags.Parse(args); err != nil {
 		return exitcode.ExecutionError
@@ -73,12 +75,16 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	result, err := app.Run(ctx, app.Options{
-		Path:   path,
-		Stdout: stdout,
-		Color:  !(shortNoColor || longNoColor),
+		Path:    path,
+		Stdout:  stdout,
+		Color:   !(shortNoColor || longNoColor),
+		Verbose: verbose,
 	})
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
+		return exitcode.ExecutionError
+	}
+	if result.HadRecoverableErrors {
 		return exitcode.ExecutionError
 	}
 

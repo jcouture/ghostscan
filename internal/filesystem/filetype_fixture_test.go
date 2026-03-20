@@ -30,7 +30,7 @@ func TestCheckFileFixtureInvalidUTF8WithoutNULIsEligible(t *testing.T) {
 		t.Fatalf("CheckFile() error = %v", err)
 	}
 
-	if got != (Eligibility{Eligible: true}) {
-		t.Fatalf("CheckFile() = %+v, want %+v", got, Eligibility{Eligible: true})
+	if !got.Eligible || got.Reason != EligibilityReasonEligible {
+		t.Fatalf("CheckFile() = %+v, want eligible text file", got)
 	}
 }

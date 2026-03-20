@@ -47,7 +47,7 @@ func TestDiscoverDirectoryRoot(t *testing.T) {
 	createSymlink(t, filepath.Join(root, "a-first.txt"), filepath.Join(root, "linked-file.txt"))
 	createSymlink(t, filepath.Join(root, "nested"), filepath.Join(root, "linked-dir"))
 
-	got, err := Discover(root)
+	discovery, err := Discover(root)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -60,8 +60,8 @@ func TestDiscoverDirectoryRoot(t *testing.T) {
 	}
 	slices.Sort(want)
 
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Discover() = %v, want %v", got, want)
+	if !reflect.DeepEqual(discovery.Candidates, want) {
+		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
 	}
 }
 
@@ -72,14 +72,14 @@ func TestDiscoverSingleFileRoot(t *testing.T) {
 	filePath := filepath.Join(root, "single.txt")
 	createFile(t, filePath)
 
-	got, err := Discover(filePath)
+	discovery, err := Discover(filePath)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
 
 	want := []string{filePath}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Discover() = %v, want %v", got, want)
+	if !reflect.DeepEqual(discovery.Candidates, want) {
+		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
 	}
 }
 
@@ -93,7 +93,7 @@ func TestDiscoverSkipsIneligibleFiles(t *testing.T) {
 	copyFixtureFile(t, testdataPath("oversize", "too_large.txt"), filepath.Join(root, "too_large.txt"))
 	writeRepeatingFile(t, filepath.Join(root, "boundary.txt"), "a", DefaultMaxFileSize)
 
-	got, err := Discover(root)
+	discovery, err := Discover(root)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -104,8 +104,8 @@ func TestDiscoverSkipsIneligibleFiles(t *testing.T) {
 	}
 	slices.Sort(want)
 
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Discover() = %v, want %v", got, want)
+	if !reflect.DeepEqual(discovery.Candidates, want) {
+		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
 	}
 }
 
@@ -115,13 +115,13 @@ func TestDiscoverSingleFileRootSkipsIneligibleFile(t *testing.T) {
 	root := t.TempDir()
 	path := copyFixtureFile(t, testdataPath("binary", "contains_nul.bin"), filepath.Join(root, "contains_nul.bin"))
 
-	got, err := Discover(path)
+	discovery, err := Discover(path)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
 
-	if len(got) != 0 {
-		t.Fatalf("Discover() = %v, want no candidates", got)
+	if len(discovery.Candidates) != 0 {
+		t.Fatalf("Discover() = %v, want no candidates", discovery.Candidates)
 	}
 }
 

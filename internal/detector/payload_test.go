@@ -270,8 +270,17 @@ func TestPayloadDetect(t *testing.T) {
 			}
 
 			for index, want := range tt.wantFindings {
-				if got[index] != want {
+				if got[index].Path != want.Path ||
+					got[index].Line != want.Line ||
+					got[index].Column != want.Column ||
+					got[index].RuleID != want.RuleID ||
+					got[index].Severity != want.Severity ||
+					got[index].Message != want.Message ||
+					got[index].Evidence != want.Evidence {
 					t.Fatalf("findings[%d] = %#v, want %#v", index, got[index], want)
+				}
+				if got[index].EndLine < got[index].Line || got[index].EndColumn < got[index].Column {
+					t.Fatalf("findings[%d] end position = (%d, %d), want end after start", index, got[index].EndLine, got[index].EndColumn)
 				}
 			}
 		})

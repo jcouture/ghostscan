@@ -22,6 +22,7 @@ package scan
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/jcouture/ghostscan/internal/finding"
@@ -93,9 +94,7 @@ func TestEngineScanExpandedPrivateUseFixtures(t *testing.T) {
 			name:    "bmp private use blob",
 			fixture: fixturePath("privateuse", "bmp_string_blob.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 17, evidence: "<U+E000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 18, evidence: "<U+E001>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 19, evidence: "<U+E002>"},
+				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 17, evidence: "<U+E000><U+E001><U+E002>"},
 			},
 		},
 		{
@@ -186,33 +185,30 @@ func TestEngineScanExpandedPayloadFixtures(t *testing.T) {
 		{
 			name:    "invisible exact threshold stays below payload rule",
 			fixture: fixturePath("payload", "invisible_exact_threshold.txt"),
-			expected: repeatExpectedFinding(expectedFinding{
+			expected: []expectedFinding{{
 				ruleID:   "unicode/invisible",
 				severity: finding.SeverityMedium,
 				line:     1,
 				column:   2,
-				evidence: "<U+200B ZERO WIDTH SPACE>",
-			}, 16),
+				evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 16),
+			}},
 		},
 		{
 			name:    "private use exact threshold stays below payload rule",
 			fixture: fixturePath("payload", "privateuse_exact_threshold.txt"),
-			expected: repeatExpectedFinding(expectedFinding{
+			expected: []expectedFinding{{
 				ruleID:   "unicode/private-use",
 				severity: finding.SeverityMedium,
 				line:     1,
 				column:   2,
-				evidence: "<U+E000>",
-			}, 16),
+				evidence: repeatEvidence("<U+E000>", 16),
+			}},
 		},
 		{
 			name:    "density with invisible bidi and directional controls",
 			fixture: fixturePath("payload", "density_mixed_controls.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 3, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 4, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 5, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 6, evidence: "<U+200B ZERO WIDTH SPACE>"},
+				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 3, evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 4)},
 				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 8, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
 				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 9, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
 				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 10, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
@@ -235,17 +231,8 @@ func TestEngineScanExpandedPayloadFixtures(t *testing.T) {
 			name:    "density below threshold does not emit payload rule",
 			fixture: fixturePath("payload", "density_below_threshold.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 3, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 4, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 5, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 6, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 7, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 9, evidence: "<U+E000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 10, evidence: "<U+E000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 11, evidence: "<U+E000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 12, evidence: "<U+E000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 13, evidence: "<U+E000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 14, evidence: "<U+E000>"},
+				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 3, evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 5)},
+				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 9, evidence: repeatEvidence("<U+E000>", 6)},
 			},
 		},
 	}
@@ -336,25 +323,22 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 	engine := NewEngine()
 
 	tests := []struct {
-		name               string
-		fixture            string
-		wantCount          int
-		wantDecoderMessage string
-		wantDecoderLevel   finding.Severity
+		name                 string
+		fixture              string
+		wantCount            int
+		wantCorrelationCount int
 	}{
 		{
-			name:               "near payload correlates both decoders",
-			fixture:            fixturePath("mixed", "glassworm_buffer_eval_near.js"),
-			wantCount:          20,
-			wantDecoderMessage: " near suspicious encoded payload sequence",
-			wantDecoderLevel:   finding.SeverityHigh,
+			name:                 "near payload correlates both decoders",
+			fixture:              fixturePath("mixed", "glassworm_buffer_eval_near.js"),
+			wantCount:            5,
+			wantCorrelationCount: 1,
 		},
 		{
-			name:               "far payload within 25 lines still correlates",
-			fixture:            fixturePath("mixed", "glassworm_buffer_eval_far.js"),
-			wantCount:          20,
-			wantDecoderMessage: " near suspicious encoded payload sequence",
-			wantDecoderLevel:   finding.SeverityHigh,
+			name:                 "far payload within 20 lines still correlates once",
+			fixture:              fixturePath("mixed", "glassworm_buffer_eval_far.js"),
+			wantCount:            4,
+			wantCorrelationCount: 0,
 		},
 	}
 
@@ -373,6 +357,7 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 
 			payloadCount := 0
 			decoderCount := 0
+			correlationCount := 0
 
 			for _, item := range findings {
 				switch item.RuleID {
@@ -383,17 +368,13 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 					}
 				case "unicode/decoder":
 					decoderCount++
-					if item.Severity != tt.wantDecoderLevel {
-						t.Fatalf("decoder severity = %q, want %q", item.Severity, tt.wantDecoderLevel)
+					if item.Severity != finding.SeverityMedium {
+						t.Fatalf("decoder severity = %q, want %q", item.Severity, finding.SeverityMedium)
 					}
-					if tt.wantDecoderMessage == "" {
-						if item.Message == "" || item.Message[len(item.Message)-len(tt.wantDecoderMessage):] != tt.wantDecoderMessage {
-							// no-op when no suffix is expected
-						}
-						continue
-					}
-					if len(item.Message) < len(tt.wantDecoderMessage) || item.Message[len(item.Message)-len(tt.wantDecoderMessage):] != tt.wantDecoderMessage {
-						t.Fatalf("decoder message = %q, want suffix %q", item.Message, tt.wantDecoderMessage)
+				case "unicode/correlation":
+					correlationCount++
+					if item.Severity != finding.SeverityHigh {
+						t.Fatalf("correlation severity = %q, want %q", item.Severity, finding.SeverityHigh)
 					}
 				}
 			}
@@ -403,6 +384,9 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 			}
 			if decoderCount != 2 {
 				t.Fatalf("decoderCount = %d, want 2", decoderCount)
+			}
+			if correlationCount != tt.wantCorrelationCount {
+				t.Fatalf("correlationCount = %d, want %d", correlationCount, tt.wantCorrelationCount)
 			}
 		})
 	}
@@ -514,4 +498,12 @@ func repeatExpectedFinding(base expectedFinding, count int) []expectedFinding {
 	}
 
 	return items
+}
+
+func repeatEvidence(token string, count int) string {
+	var text strings.Builder
+	for range count {
+		text.WriteString(token)
+	}
+	return text.String()
 }

@@ -28,38 +28,50 @@ import (
 	"sort"
 )
 
+type Discovery struct {
+	Candidates []string
+	Stats      DiscoveryStats
+}
+
+type DiscoveryStats struct {
+	FilesDiscovered   int
+	DirectoriesPruned int
+	Skipped           SkipStats
+}
+
 // Discover returns clean absolute paths for regular-file scan candidates.
-func Discover(root string) ([]string, error) {
+func Discover(root string) (Discovery, error) {
 	cleanRoot := filepath.Clean(root)
 	absoluteRoot, err := filepath.Abs(cleanRoot)
 	if err != nil {
-		return nil, fmt.Errorf("resolve absolute path for %q: %w", root, err)
+		return Discovery{}, fmt.Errorf("resolve absolute path for %q: %w", root, err)
 	}
 
 	info, err := os.Lstat(absoluteRoot)
 	if err != nil {
-		return nil, fmt.Errorf("stat root %q: %w", absoluteRoot, err)
+		return Discovery{}, fmt.Errorf("stat root %q: %w", absoluteRoot, err)
 	}
 
 	if isSymlink(info.Mode()) {
-		return nil, fmt.Errorf("root path %q is a symlink", absoluteRoot)
+		return Discovery{}, fmt.Errorf("root path %q is a symlink", absoluteRoot)
 	}
 
+	stats := DiscoveryStats{Skipped: newSkipStats()}
 	if isRegularFileCandidate(info.Mode()) {
-		eligible, err := isEligibleFile(absoluteRoot, DefaultMaxFileSize)
+		stats.FilesDiscovered = 1
+		eligibility, err := CheckFile(absoluteRoot, DefaultMaxFileSize)
 		if err != nil {
-			return nil, err
+			return Discovery{}, err
 		}
-
-		if !eligible {
-			return []string{}, nil
+		if !eligibility.Eligible {
+			stats.Skipped.add(eligibility.Reason)
+			return Discovery{Stats: stats}, nil
 		}
-
-		return []string{absoluteRoot}, nil
+		return Discovery{Candidates: []string{absoluteRoot}, Stats: stats}, nil
 	}
 
 	if !info.IsDir() {
-		return nil, fmt.Errorf("root path %q is not a regular file or directory", absoluteRoot)
+		return Discovery{}, fmt.Errorf("root path %q is not a regular file or directory", absoluteRoot)
 	}
 
 	candidates := make([]string, 0)
@@ -70,33 +82,38 @@ func Discover(root string) ([]string, error) {
 
 		if path == absoluteRoot {
 			if isExcludedDirectory(entry.Name()) {
+				stats.DirectoriesPruned++
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
 		if isSymlink(entry.Type()) {
-			// Do not follow links into content outside the requested tree.
+			stats.Skipped.add(EligibilityReasonSymlink)
 			return nil
 		}
 
 		if entry.IsDir() {
 			if isExcludedDirectory(entry.Name()) {
+				stats.DirectoriesPruned++
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
+		stats.FilesDiscovered++
 		if !isRegularFileCandidate(entry.Type()) {
+			stats.Skipped.add(EligibilityReasonNotRegular)
 			return nil
 		}
 
-		eligible, err := isEligibleFile(path, DefaultMaxFileSize)
+		eligibility, err := CheckFile(path, DefaultMaxFileSize)
 		if err != nil {
 			return err
 		}
 
-		if !eligible {
+		if !eligibility.Eligible {
+			stats.Skipped.add(eligibility.Reason)
 			return nil
 		}
 
@@ -104,10 +121,9 @@ func Discover(root string) ([]string, error) {
 		return nil
 	})
 	if walkErr != nil {
-		return nil, walkErr
+		return Discovery{}, walkErr
 	}
 
-	// WalkDir order is filesystem-dependent; sort once so scans stay reproducible.
 	sort.Strings(candidates)
-	return candidates, nil
+	return Discovery{Candidates: candidates, Stats: stats}, nil
 }

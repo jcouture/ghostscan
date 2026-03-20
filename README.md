@@ -52,6 +52,12 @@ Turn off colored output:
 ghostscan --no-color .
 ```
 
+Print a scan summary with timing, skip counts, and detector totals:
+
+```bash
+ghostscan --verbose .
+```
+
 Use it in CI or scripts:
 
 ```bash
@@ -73,11 +79,11 @@ Typical uses:
 
 ## Features
 
-- Finds invisible Unicode characters such as zero-width characters
-- Flags private-use Unicode characters that can hide custom payloads
+- Finds grouped invisible Unicode sequences such as zero-width payload runs
+- Flags grouped private-use Unicode sequences that can hide custom payloads
 - Detects Trojan Source bidirectional control characters
 - Spots suspicious hidden Unicode payload runs
-- Warns about decoder or dynamic execution patterns near hidden payloads
+- Correlates hidden Unicode payloads with nearby decoder or dynamic execution markers
 - Detects mixed-script identifiers that look legitimate at a glance
 - Detects combining marks inside token-like text
 - Produces a readable terminal report with file locations, severity, and evidence

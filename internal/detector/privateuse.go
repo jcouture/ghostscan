@@ -21,8 +21,6 @@
 package detector
 
 import (
-	"fmt"
-
 	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
@@ -36,22 +34,20 @@ func NewPrivateUse() PrivateUse {
 }
 
 func (PrivateUse) Detect(file File) []finding.Finding {
+	if file.Prepass.Ready && !file.Prepass.HasPrivateUse {
+		return nil
+	}
+
 	findings := make([]finding.Finding, 0)
-
-	for _, observation := range file.Observations {
-		if !unicodeutil.IsPrivateUse(observation.Rune) {
-			continue
-		}
-
-		findings = append(findings, finding.Finding{
-			Path:     file.Path,
-			Line:     observation.Line,
-			Column:   observation.Column,
-			RuleID:   PrivateUseRuleID,
-			Severity: finding.SeverityMedium,
-			Message:  fmt.Sprintf("Private Use Area Unicode character detected: U+%04X", observation.Rune),
-			Evidence: unicodeutil.RenderRune(observation.Rune),
-		})
+	for _, run := range groupObservations(file.Observations, unicodeutil.IsPrivateUse) {
+		findings = append(findings, groupedUnicodeFinding(
+			file.Path,
+			run,
+			PrivateUseRuleID,
+			finding.SeverityMedium,
+			"Private-use Unicode sequence detected",
+			"private-use Unicode characters",
+		))
 	}
 
 	return findings
