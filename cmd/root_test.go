@@ -64,6 +64,11 @@ func TestExecute(t *testing.T) {
 			wantANSI: true,
 		},
 		{
+			name:     "custom max file size skips findings",
+			args:     []string{"--no-color", "--max-file-size", "16", filepath.Join("..", "testdata", "privateuse")},
+			wantCode: exitcode.Success,
+		},
+		{
 			name:     "invalid path",
 			args:     []string{missingPath},
 			wantCode: exitcode.ExecutionError,
@@ -79,6 +84,12 @@ func TestExecute(t *testing.T) {
 			name:     "print version",
 			args:     []string{"--version"},
 			wantCode: exitcode.Success,
+		},
+		{
+			name:     "invalid max file size",
+			args:     []string{"--max-file-size", "-1"},
+			wantCode: exitcode.ExecutionError,
+			wantErr:  "--max-file-size must be zero or greater",
 		},
 	}
 

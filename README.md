@@ -52,10 +52,16 @@ Turn off colored output:
 ghostscan --no-color .
 ```
 
-Print a scan summary with timing, skip counts, and detector totals:
+Print structured finding blocks with evidence, context, and fingerprints:
 
 ```bash
 ghostscan --verbose .
+```
+
+Lower the file size limit for a scan:
+
+```bash
+ghostscan --max-file-size 1048576 .
 ```
 
 Use it in CI or scripts:
@@ -86,9 +92,11 @@ Typical uses:
 - Correlates hidden Unicode payloads with nearby decoder or dynamic execution markers
 - Detects mixed-script identifiers that look legitimate at a glance
 - Detects combining marks inside token-like text
-- Produces a readable terminal report with file locations, severity, and evidence
+- Produces a compact default terminal report grouped by file
+- Produces structured verbose finding blocks with rule IDs, evidence, context, and fingerprints
+- Prints a deterministic final `ghostscan_result:` status line for CI and grep-friendly logs
 - Skips common generated or dependency folders such as `.git`, `node_modules`, and `vendor`
-- Skips binary files and files larger than 5 MB
+- Skips binary files and files larger than 5 MB by default, with `--max-file-size` available when you need a stricter limit
 
 ## FAQ / Troubleshooting
 

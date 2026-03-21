@@ -37,6 +37,7 @@ type EligibilityReason string
 
 const (
 	EligibilityReasonEligible   EligibilityReason = ""
+	EligibilityReasonExcluded   EligibilityReason = "excluded"
 	EligibilityReasonNotRegular EligibilityReason = "not_regular"
 	EligibilityReasonTooLarge   EligibilityReason = "too_large"
 	EligibilityReasonBinaryNUL  EligibilityReason = "binary_nul"
@@ -62,6 +63,13 @@ func (s *SkipStats) add(reason EligibilityReason) {
 		return
 	}
 	s.ByReason[reason]++
+}
+
+func (s *SkipStats) addN(reason EligibilityReason, count int) {
+	if s == nil || reason == EligibilityReasonEligible || count <= 0 {
+		return
+	}
+	s.ByReason[reason] += count
 }
 
 func isSymlink(mode fs.FileMode) bool {

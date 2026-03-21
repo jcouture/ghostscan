@@ -23,123 +23,221 @@ package report
 import (
 	"bytes"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jcouture/ghostscan/internal/finding"
 )
 
-func TestWriteHumanGolden(t *testing.T) {
+func TestWriteHumanCleanDefaultOutput(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		findings []finding.Finding
-		opts     Options
-		golden   string
-	}{
-		{
-			name:   "empty findings",
-			opts:   Options{FilesScanned: 3, Color: false},
-			golden: "empty.golden",
+	var buf bytes.Buffer
+	err := WriteHuman(&buf, nil, Options{
+		Version: "dev",
+		Color:   false,
+		Runtime: RuntimeStats{
+			FilesScanned:    12,
+			BytesScanned:    1536,
+			ScanDuration:    842 * time.Millisecond,
+			SkippedByReason: []Count{{Label: "binary_nul", Value: 2}, {Label: "excluded", Value: 4}, {Label: "too_large", Value: 1}},
 		},
-		{
-			name: "incident grouping",
-			findings: []finding.Finding{
-				{
-					Path:     "src/a.js",
-					Line:     1,
-					Column:   17,
-					RuleID:   "unicode/invisible",
-					Severity: finding.SeverityMedium,
-					Message:  "Invisible Unicode character detected: U+200B ZERO WIDTH SPACE",
-					Evidence: "<U+200B ZERO WIDTH SPACE>",
-				},
-				{
-					Path:     "src/a.js",
-					Line:     1,
-					Column:   18,
-					RuleID:   "unicode/invisible",
-					Severity: finding.SeverityMedium,
-					Message:  "Invisible Unicode character detected: U+200B ZERO WIDTH SPACE",
-					Evidence: "<U+200B ZERO WIDTH SPACE>",
-				},
-				{
-					Path:     "src/a.js",
-					Line:     1,
-					Column:   19,
-					RuleID:   "unicode/invisible",
-					Severity: finding.SeverityMedium,
-					Message:  "Invisible Unicode character detected: U+200B ZERO WIDTH SPACE",
-					Evidence: "<U+200B ZERO WIDTH SPACE>",
-				},
-				{
-					Path:     "src/a.js",
-					Line:     1,
-					Column:   17,
-					RuleID:   "unicode/payload",
-					Severity: finding.SeverityHigh,
-					Message:  "Suspicious encoded payload sequence detected: 3 consecutive invisible Unicode characters",
-					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 3),
-				},
-				{
-					Path:     "src/a.js",
-					Line:     10,
-					Column:   3,
-					RuleID:   "unicode/decoder",
-					Severity: finding.SeverityHigh,
-					Message:  "Suspicious decoder or dynamic execution pattern detected: eval( near suspicious encoded payload sequence",
-					Evidence: "eval(",
-				},
-				{
-					Path:     "src/b.js",
-					Line:     2,
-					Column:   2,
-					RuleID:   "unicode/bidi",
-					Severity: finding.SeverityHigh,
-					Message:  "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
-					Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
-				},
-				{
-					Path:     "src/b.js",
-					Line:     5,
-					Column:   8,
-					RuleID:   "unicode/mixed-script",
-					Severity: finding.SeverityHigh,
-					Message:  "Suspicious mixed-script token detected: token mixes Latin with Cyrillic letters",
-					Evidence: "\"validateUsеr\" (е(U+0435 Cyrillic))",
-				},
-			},
-			opts:   Options{FilesScanned: 5, Color: false},
-			golden: "incidents.golden",
-		},
+	})
+	if err != nil {
+		t.Fatalf("WriteHuman() error = %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	want := "" +
+		"ghostscan dev\n" +
+		"\n" +
+		"scanned 12 files (1.5 KB) in 842ms\n" +
+		"skipped 7 files (binary: 2, excluded: 4, oversize: 1)\n" +
+		"\n" +
+		"OK no suspicious unicode patterns found\n" +
+		"\n" +
+		"ghostscan_result: findings=0 critical=0 high=0 medium=0 low=0\n"
 
-			var buf bytes.Buffer
-			if err := WriteHuman(&buf, tt.findings, tt.opts); err != nil {
-				t.Fatalf("WriteHuman() error = %v", err)
-			}
-
-			goldenPath := filepath.Join("testdata", tt.golden)
-			want, err := os.ReadFile(goldenPath)
-			if err != nil {
-				t.Fatalf("ReadFile(%q) error = %v", goldenPath, err)
-			}
-
-			if diff := compareOutput(buf.String(), string(want)); diff != "" {
-				t.Fatalf("report output mismatch:\n%s", diff)
-			}
-		})
+	if diff := compareOutput(buf.String(), want); diff != "" {
+		t.Fatalf("clean output mismatch:\n%s", diff)
 	}
 }
 
-func TestWriteHumanColorOutput(t *testing.T) {
+func TestWriteHumanDefaultGroupsFindingsByFile(t *testing.T) {
+	t.Parallel()
+
+	findings := []finding.Finding{
+		{
+			Path:      "cmd/render/main.go",
+			Line:      133,
+			Column:    14,
+			EndLine:   133,
+			EndColumn: 19,
+			RuleID:    "unicode/invisible",
+			Severity:  finding.SeverityMedium,
+			Message:   "Invisible Unicode sequence detected: 6 contiguous runes",
+			Evidence:  strings.Repeat("<U+200B ZERO WIDTH SPACE>", 6),
+		},
+		{
+			Path:      "internal/auth/handler.go",
+			Line:      57,
+			Column:    9,
+			EndLine:   57,
+			EndColumn: 9,
+			RuleID:    "unicode/bidi",
+			Severity:  finding.SeverityHigh,
+			Message:   "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
+			Evidence:  "<U+202E RIGHT-TO-LEFT OVERRIDE>",
+		},
+		{
+			Path:      "internal/auth/handler.go",
+			Line:      41,
+			Column:    17,
+			EndLine:   41,
+			EndColumn: 17,
+			RuleID:    "unicode/bidi",
+			Severity:  finding.SeverityHigh,
+			Message:   "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
+			Evidence:  "<U+202E RIGHT-TO-LEFT OVERRIDE>",
+		},
+	}
+
+	var buf bytes.Buffer
+	err := WriteHuman(&buf, findings, Options{
+		Version: "dev",
+		Color:   false,
+		Runtime: RuntimeStats{
+			FilesScanned:    3,
+			BytesScanned:    4096,
+			ScanDuration:    120 * time.Millisecond,
+			SkippedByReason: []Count{{Label: "binary_nul", Value: 1}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("WriteHuman() error = %v", err)
+	}
+
+	want := "" +
+		"ghostscan dev\n" +
+		"\n" +
+		"scanned 3 files (4.1 KB) in 120ms\n" +
+		"skipped 1 files (binary: 1)\n" +
+		"\n" +
+		"findings: 3 (critical: 0, high: 2, medium: 1, low: 0)\n" +
+		"\n" +
+		"────────────────────────────────────────\n" +
+		"\n" +
+		"cmd/render/main.go\n" +
+		"\n" +
+		"  [MEDIUM] contiguous zero-width unicode sequence (length: 6)\n" +
+		"    line 133, column 14\n" +
+		"\n" +
+		"internal/auth/handler.go\n" +
+		"\n" +
+		"  [HIGH] Trojan Source bidi control character\n" +
+		"    line 41, column 17\n" +
+		"\n" +
+		"  [HIGH] Trojan Source bidi control character\n" +
+		"    line 57, column 9\n" +
+		"\n" +
+		"ghostscan_result: findings=3 critical=0 high=2 medium=1 low=0\n"
+
+	if diff := compareOutput(buf.String(), want); diff != "" {
+		t.Fatalf("default grouped output mismatch:\n%s", diff)
+	}
+}
+
+func TestWriteHumanVerboseOutputIncludesStructuredFields(t *testing.T) {
+	t.Parallel()
+
+	findings := []finding.Finding{
+		{
+			Path:      "internal/auth/handler.go",
+			Line:      41,
+			Column:    17,
+			EndLine:   41,
+			EndColumn: 17,
+			RuleID:    "unicode/bidi",
+			Severity:  finding.SeverityHigh,
+			Message:   "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
+			Evidence:  "<U+202E RIGHT-TO-LEFT OVERRIDE>",
+			Context:   "if isAdmin<U+202E RIGHT-TO-LEFT OVERRIDE> } else {",
+		},
+		{
+			Path:      "src/bootstrap.js",
+			Line:      88,
+			Column:    13,
+			EndLine:   88,
+			EndColumn: 16,
+			RuleID:    "unicode/invisible",
+			Severity:  finding.SeverityMedium,
+			Message:   "Invisible Unicode sequence detected: 4 contiguous runes",
+			Evidence:  "<U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200D ZERO WIDTH JOINER><U+2060 WORD JOINER>",
+			Context:   `const payload = "<U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200D ZERO WIDTH JOINER>..."`,
+		},
+	}
+
+	var buf bytes.Buffer
+	err := WriteHuman(&buf, findings, Options{
+		Version: "dev",
+		Color:   false,
+		Verbose: true,
+		Runtime: RuntimeStats{
+			FilesScanned:    2,
+			BytesScanned:    200,
+			ScanDuration:    10 * time.Millisecond,
+			SkippedByReason: []Count{{Label: "excluded", Value: 5}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("WriteHuman() error = %v", err)
+	}
+
+	output := buf.String()
+	for _, needle := range []string{
+		"Finding:     Trojan Source bidi control character",
+		"Severity:    HIGH",
+		"RuleID:      unicode/bidi",
+		"Character:   <U+202E RIGHT-TO-LEFT OVERRIDE>",
+		"Explanation:\n  visual order differs from logical execution order",
+		"Fingerprint: internal/auth/handler.go:unicode/bidi:41:17",
+		"Finding:     Contiguous zero-width unicode sequence (length: 4)",
+		"Count:       4 suspicious runes",
+		"Category:    invisible unicode",
+		"Context:\n  const payload = \"<U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200D ZERO WIDTH JOINER>...\"",
+		"ghostscan_result: findings=2 critical=0 high=1 medium=1 low=0",
+	} {
+		if !strings.Contains(output, needle) {
+			t.Fatalf("verbose output = %q, want substring %q", output, needle)
+		}
+	}
+}
+
+func TestWriteHumanDeterministicOrdering(t *testing.T) {
+	t.Parallel()
+
+	findings := []finding.Finding{
+		{Path: "z-last.js", Line: 1, Column: 1, RuleID: "unicode/invisible", Severity: finding.SeverityMedium, Evidence: "<U+200B ZERO WIDTH SPACE>", Message: "Invisible Unicode character detected"},
+		{Path: "a-first.js", Line: 10, Column: 2, RuleID: "unicode/bidi", Severity: finding.SeverityHigh, Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>", Message: "Trojan Source bidi control character detected"},
+		{Path: "a-first.js", Line: 2, Column: 5, RuleID: "unicode/invisible", Severity: finding.SeverityMedium, Evidence: "<U+200B ZERO WIDTH SPACE>", Message: "Invisible Unicode character detected"},
+	}
+
+	model := buildReport(findings, Options{})
+	if len(model.files) != 2 {
+		t.Fatalf("len(files) = %d, want 2", len(model.files))
+	}
+	if model.files[0].path != "a-first.js" {
+		t.Fatalf("files[0].path = %q, want a-first.js", model.files[0].path)
+	}
+	if model.files[0].findings[0].Severity != finding.SeverityHigh {
+		t.Fatalf("files[0].findings[0].Severity = %q, want HIGH first", model.files[0].findings[0].Severity)
+	}
+	if model.files[0].findings[1].Line != 2 {
+		t.Fatalf("files[0].findings[1].Line = %d, want line 2 second", model.files[0].findings[1].Line)
+	}
+}
+
+func TestWriteHumanNoColorModeHasNoANSI(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
@@ -150,16 +248,40 @@ func TestWriteHumanColorOutput(t *testing.T) {
 			Column:   1,
 			RuleID:   "unicode/bidi",
 			Severity: finding.SeverityHigh,
-			Message:  "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
+			Message:  "Trojan Source bidi control character detected",
 			Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
 		},
-	}, Options{FilesScanned: 1, Color: true})
+	}, Options{Color: false, Runtime: RuntimeStats{FilesScanned: 1}})
+	if err != nil {
+		t.Fatalf("WriteHuman() error = %v", err)
+	}
+
+	if strings.Contains(buf.String(), "\x1b[") {
+		t.Fatalf("WriteHuman() = %q, want plain output", buf.String())
+	}
+}
+
+func TestWriteHumanColorOutputUsesANSI(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	err := WriteHuman(&buf, []finding.Finding{
+		{
+			Path:     "src/a.js",
+			Line:     1,
+			Column:   1,
+			RuleID:   "unicode/bidi",
+			Severity: finding.SeverityHigh,
+			Message:  "Trojan Source bidi control character detected",
+			Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
+		},
+	}, Options{Color: true, Runtime: RuntimeStats{FilesScanned: 1}})
 	if err != nil {
 		t.Fatalf("WriteHuman() error = %v", err)
 	}
 
 	if !strings.Contains(buf.String(), "\x1b[") {
-		t.Fatalf("WriteHuman() = %q, want ANSI escapes when color is enabled", buf.String())
+		t.Fatalf("WriteHuman() = %q, want ANSI output", buf.String())
 	}
 }
 
@@ -176,10 +298,10 @@ func TestWriteHumanWriteError(t *testing.T) {
 			Column:   1,
 			RuleID:   "unicode/bidi",
 			Severity: finding.SeverityHigh,
-			Message:  "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
+			Message:  "Trojan Source bidi control character detected",
 			Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
 		},
-	}, Options{FilesScanned: 1})
+	}, Options{Runtime: RuntimeStats{FilesScanned: 1}})
 	if err == nil {
 		t.Fatal("WriteHuman() error = nil, want error")
 	}
@@ -188,65 +310,6 @@ func TestWriteHumanWriteError(t *testing.T) {
 	}
 	if !errors.Is(err, errBoom) {
 		t.Fatalf("WriteHuman() error = %v, want wrapped %v", err, errBoom)
-	}
-}
-
-func TestSummarizeUsesIncidentCounts(t *testing.T) {
-	t.Parallel()
-
-	report := buildReport([]finding.Finding{
-		{
-			Path:     "a.js",
-			Line:     1,
-			Column:   1,
-			RuleID:   "unicode/bidi",
-			Severity: finding.SeverityHigh,
-			Message:  "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
-			Evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>",
-		},
-		{
-			Path:     "a.js",
-			Line:     2,
-			Column:   1,
-			RuleID:   "unicode/bidi",
-			Severity: finding.SeverityHigh,
-			Message:  "Trojan Source bidi control character detected: U+202A LEFT-TO-RIGHT EMBEDDING",
-			Evidence: "<U+202A LEFT-TO-RIGHT EMBEDDING>",
-		},
-		{
-			Path:     "b.js",
-			Line:     1,
-			Column:   3,
-			RuleID:   "unicode/private-use",
-			Severity: finding.SeverityMedium,
-			Message:  "Private-use Unicode character detected: U+E000",
-			Evidence: "<U+E000>",
-		},
-		{
-			Path:     "b.js",
-			Line:     1,
-			Column:   4,
-			RuleID:   "unicode/private-use",
-			Severity: finding.SeverityMedium,
-			Message:  "Private-use Unicode character detected: U+E000",
-			Evidence: "<U+E000>",
-		},
-	}, Options{FilesScanned: 9})
-
-	if report.summary.filesScanned != 9 {
-		t.Fatalf("filesScanned = %d, want 9", report.summary.filesScanned)
-	}
-	if report.summary.filesWithFindings != 2 {
-		t.Fatalf("filesWithFindings = %d, want 2", report.summary.filesWithFindings)
-	}
-	if len(report.summary.severityCounts) != 2 {
-		t.Fatalf("len(severityCounts) = %d, want 2", len(report.summary.severityCounts))
-	}
-	if report.summary.severityCounts[0].severity != finding.SeverityHigh || report.summary.severityCounts[0].count != 1 {
-		t.Fatalf("severityCounts[0] = %+v, want HIGH=1 incident", report.summary.severityCounts[0])
-	}
-	if report.summary.severityCounts[1].severity != finding.SeverityMedium || report.summary.severityCounts[1].count != 1 {
-		t.Fatalf("severityCounts[1] = %+v, want MEDIUM=1 incident", report.summary.severityCounts[1])
 	}
 }
 
@@ -262,6 +325,5 @@ func compareOutput(got, want string) string {
 	if got == want {
 		return ""
 	}
-
 	return "got:\n" + got + "\nwant:\n" + want
 }

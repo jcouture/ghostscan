@@ -47,7 +47,7 @@ func TestDiscoverDirectoryRoot(t *testing.T) {
 	createSymlink(t, filepath.Join(root, "a-first.txt"), filepath.Join(root, "linked-file.txt"))
 	createSymlink(t, filepath.Join(root, "nested"), filepath.Join(root, "linked-dir"))
 
-	discovery, err := Discover(root)
+	discovery, err := Discover(root, DefaultMaxFileSize)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -63,6 +63,9 @@ func TestDiscoverDirectoryRoot(t *testing.T) {
 	if !reflect.DeepEqual(discovery.Candidates, want) {
 		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
 	}
+	if got := discovery.Stats.Skipped.ByReason[EligibilityReasonExcluded]; got != 8 {
+		t.Fatalf("excluded skipped count = %d, want 8", got)
+	}
 }
 
 func TestDiscoverSingleFileRoot(t *testing.T) {
@@ -72,7 +75,7 @@ func TestDiscoverSingleFileRoot(t *testing.T) {
 	filePath := filepath.Join(root, "single.txt")
 	createFile(t, filePath)
 
-	discovery, err := Discover(filePath)
+	discovery, err := Discover(filePath, DefaultMaxFileSize)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -93,7 +96,7 @@ func TestDiscoverSkipsIneligibleFiles(t *testing.T) {
 	copyFixtureFile(t, testdataPath("oversize", "too_large.txt"), filepath.Join(root, "too_large.txt"))
 	writeRepeatingFile(t, filepath.Join(root, "boundary.txt"), "a", DefaultMaxFileSize)
 
-	discovery, err := Discover(root)
+	discovery, err := Discover(root, DefaultMaxFileSize)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -109,13 +112,34 @@ func TestDiscoverSkipsIneligibleFiles(t *testing.T) {
 	}
 }
 
+func TestDiscoverRespectsCustomMaxFileSize(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeRepeatingFile(t, filepath.Join(root, "small.txt"), "a", 32)
+	writeRepeatingFile(t, filepath.Join(root, "large.txt"), "a", 64)
+
+	discovery, err := Discover(root, 32)
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	want := []string{filepath.Join(root, "small.txt")}
+	if !reflect.DeepEqual(discovery.Candidates, want) {
+		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
+	}
+	if got := discovery.Stats.Skipped.ByReason[EligibilityReasonTooLarge]; got != 1 {
+		t.Fatalf("oversize skipped count = %d, want 1", got)
+	}
+}
+
 func TestDiscoverSingleFileRootSkipsIneligibleFile(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	path := copyFixtureFile(t, testdataPath("binary", "contains_nul.bin"), filepath.Join(root, "contains_nul.bin"))
 
-	discovery, err := Discover(path)
+	discovery, err := Discover(path, DefaultMaxFileSize)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -130,7 +154,7 @@ func TestDiscoverInvalidPath(t *testing.T) {
 
 	missing := filepath.Join(t.TempDir(), "missing")
 
-	_, err := Discover(missing)
+	_, err := Discover(missing, DefaultMaxFileSize)
 	if err == nil {
 		t.Fatal("Discover() error = nil, want error")
 	}
@@ -150,7 +174,7 @@ func TestDiscoverRejectsSymlinkRoot(t *testing.T) {
 	linkPath := filepath.Join(root, "link.txt")
 	createSymlink(t, target, linkPath)
 
-	_, err := Discover(linkPath)
+	_, err := Discover(linkPath, DefaultMaxFileSize)
 	if err == nil {
 		t.Fatal("Discover() error = nil, want error")
 	}

@@ -40,7 +40,11 @@ type DiscoveryStats struct {
 }
 
 // Discover returns clean absolute paths for regular-file scan candidates.
-func Discover(root string) (Discovery, error) {
+func Discover(root string, maxFileSize int64) (Discovery, error) {
+	if maxFileSize <= 0 {
+		maxFileSize = DefaultMaxFileSize
+	}
+
 	cleanRoot := filepath.Clean(root)
 	absoluteRoot, err := filepath.Abs(cleanRoot)
 	if err != nil {
@@ -59,7 +63,7 @@ func Discover(root string) (Discovery, error) {
 	stats := DiscoveryStats{Skipped: newSkipStats()}
 	if isRegularFileCandidate(info.Mode()) {
 		stats.FilesDiscovered = 1
-		eligibility, err := CheckFile(absoluteRoot, DefaultMaxFileSize)
+		eligibility, err := CheckFile(absoluteRoot, maxFileSize)
 		if err != nil {
 			return Discovery{}, err
 		}
@@ -83,6 +87,11 @@ func Discover(root string) (Discovery, error) {
 		if path == absoluteRoot {
 			if isExcludedDirectory(entry.Name()) {
 				stats.DirectoriesPruned++
+				count, err := countExcludedFiles(path)
+				if err != nil {
+					return err
+				}
+				stats.Skipped.addN(EligibilityReasonExcluded, count)
 				return filepath.SkipDir
 			}
 			return nil
@@ -96,6 +105,11 @@ func Discover(root string) (Discovery, error) {
 		if entry.IsDir() {
 			if isExcludedDirectory(entry.Name()) {
 				stats.DirectoriesPruned++
+				count, err := countExcludedFiles(path)
+				if err != nil {
+					return err
+				}
+				stats.Skipped.addN(EligibilityReasonExcluded, count)
 				return filepath.SkipDir
 			}
 			return nil
@@ -107,7 +121,7 @@ func Discover(root string) (Discovery, error) {
 			return nil
 		}
 
-		eligibility, err := CheckFile(path, DefaultMaxFileSize)
+		eligibility, err := CheckFile(path, maxFileSize)
 		if err != nil {
 			return err
 		}
@@ -126,4 +140,30 @@ func Discover(root string) (Discovery, error) {
 
 	sort.Strings(candidates)
 	return Discovery{Candidates: candidates, Stats: stats}, nil
+}
+
+func countExcludedFiles(root string) (int, error) {
+	count := 0
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("walk excluded directory %q: %w", path, walkErr)
+		}
+		if path == root {
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if isSymlink(entry.Type()) {
+			return nil
+		}
+		if isRegularFileCandidate(entry.Type()) {
+			count++
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

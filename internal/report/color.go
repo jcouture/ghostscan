@@ -23,36 +23,41 @@ package report
 import "github.com/fatih/color"
 
 type palette struct {
-	high   func(a ...any) string
-	medium func(a ...any) string
-	header func(a ...any) string
-	bold   func(a ...any) string
+	critical func(a ...any) string
+	high     func(a ...any) string
+	medium   func(a ...any) string
+	low      func(a ...any) string
+	ok       func(a ...any) string
 }
 
 func newPalette(enabled bool) palette {
 	if !enabled {
 		return palette{
-			high:   plainSprint,
-			medium: plainSprint,
-			header: plainSprint,
-			bold:   plainSprint,
+			critical: plainSprint,
+			high:     plainSprint,
+			medium:   plainSprint,
+			low:      plainSprint,
+			ok:       plainSprint,
 		}
 	}
 
+	critical := color.New(color.FgRed, color.Bold)
+	critical.EnableColor()
 	high := color.New(color.FgRed, color.Bold)
 	high.EnableColor()
 	medium := color.New(color.FgYellow, color.Bold)
 	medium.EnableColor()
-	header := color.New(color.FgCyan, color.Bold)
-	header.EnableColor()
-	bold := color.New(color.Bold)
-	bold.EnableColor()
+	low := color.New(color.FgBlue, color.Bold)
+	low.EnableColor()
+	ok := color.New(color.FgGreen, color.Bold)
+	ok.EnableColor()
 
 	return palette{
-		high:   high.SprintFunc(),
-		medium: medium.SprintFunc(),
-		header: header.SprintFunc(),
-		bold:   bold.SprintFunc(),
+		critical: critical.SprintFunc(),
+		high:     high.SprintFunc(),
+		medium:   medium.SprintFunc(),
+		low:      low.SprintFunc(),
+		ok:       ok.SprintFunc(),
 	}
 }
 

@@ -20,7 +20,10 @@
 
 package unicodeutil
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func RenderRune(r rune) string {
 	if name := BidiControlName(r); name != "" {
@@ -36,4 +39,29 @@ func RenderRune(r rune) string {
 	}
 
 	return fmt.Sprintf("<U+%04X>", r)
+}
+
+func RenderText(text string) string {
+	var builder strings.Builder
+	builder.Grow(len(text))
+
+	for _, r := range text {
+		switch {
+		case IsInvisible(r), IsBidiControl(r), IsSuspiciousDirectionalControl(r), IsPrivateUse(r):
+			builder.WriteString(RenderRune(r))
+		default:
+			switch r {
+			case '\t':
+				builder.WriteString(`\t`)
+			case '\r':
+				builder.WriteString(`\r`)
+			case '\n':
+				builder.WriteString(`\n`)
+			default:
+				builder.WriteRune(r)
+			}
+		}
+	}
+
+	return builder.String()
 }

@@ -130,20 +130,17 @@ func TestRunRendersIncidentReport(t *testing.T) {
 	}
 
 	output := stdout.String()
-	if !strings.Contains(output, "ghostscan\n=========") {
-		t.Fatalf("stdout = %q, want executive summary header", output)
+	if !strings.Contains(output, "ghostscan dev") {
+		t.Fatalf("stdout = %q, want version header", output)
 	}
-	if !strings.Contains(output, "Files scanned: 9") {
+	if !strings.Contains(output, "scanned 9 files") {
 		t.Fatalf("stdout = %q, want scanned file count", output)
 	}
-	if !strings.Contains(output, "Hidden Unicode payload with nearby decoder pattern") {
+	if !strings.Contains(output, "hidden unicode payload sequence + decoder pattern") {
 		t.Fatalf("stdout = %q, want correlation incident", output)
 	}
-	if !strings.Contains(output, "Supporting observations:") {
-		t.Fatalf("stdout = %q, want supporting observations section", output)
-	}
-	if !strings.Contains(output, "payload: <U+200B ZERO WIDTH SPACE>") {
-		t.Fatalf("stdout = %q, want collapsed payload evidence", output)
+	if !strings.Contains(output, "ghostscan_result: findings=") {
+		t.Fatalf("stdout = %q, want final status line", output)
 	}
 }
 
@@ -161,7 +158,7 @@ func TestRunResultHasFindingsFalseForCleanInput(t *testing.T) {
 	if result.HasFindings {
 		t.Fatal("Run() HasFindings = true, want false")
 	}
-	if !strings.Contains(stdout.String(), "Result: CLEAN") {
+	if !strings.Contains(stdout.String(), "no suspicious unicode patterns found") {
 		t.Fatalf("stdout = %q, want clean report", stdout.String())
 	}
 }

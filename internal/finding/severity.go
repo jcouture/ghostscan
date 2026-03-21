@@ -23,6 +23,8 @@ package finding
 type Severity string
 
 const (
-	SeverityHigh   Severity = "HIGH"
-	SeverityMedium Severity = "MEDIUM"
+	SeverityCritical Severity = "CRITICAL"
+	SeverityHigh     Severity = "HIGH"
+	SeverityMedium   Severity = "MEDIUM"
+	SeverityLow      Severity = "LOW"
 )

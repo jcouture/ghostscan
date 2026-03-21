@@ -36,10 +36,12 @@ import (
 )
 
 type Options struct {
-	Path    string
-	Stdout  io.Writer
-	Color   bool
-	Verbose bool
+	Path        string
+	Stdout      io.Writer
+	Color       bool
+	Verbose     bool
+	MaxFileSize int64
+	Version     string
 }
 
 type Result struct {
@@ -67,7 +69,12 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	}
 
 	walkStart := time.Now()
-	discovery, err := filesystem.Discover(path)
+	maxFileSize := opts.MaxFileSize
+	if maxFileSize <= 0 {
+		maxFileSize = filesystem.DefaultMaxFileSize
+	}
+
+	discovery, err := filesystem.Discover(path, maxFileSize)
 	if err != nil {
 		return Result{}, fmt.Errorf("discover files from %q: %w", path, err)
 	}
@@ -88,9 +95,9 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	finding.Sort(findings)
 
 	if err := report.WriteHuman(opts.Stdout, findings, report.Options{
-		FilesScanned: len(results),
-		Color:        opts.Color,
-		Verbose:      opts.Verbose,
+		Version: opts.Version,
+		Color:   opts.Color,
+		Verbose: opts.Verbose,
 		Runtime: report.RuntimeStats{
 			WalkDuration:          walkDuration,
 			ScanDuration:          scanDuration,
@@ -116,10 +123,7 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 		return nil, nil
 	}
 
-	workerCount := min(max(runtime.NumCPU(), 1), 4)
-	if workerCount > len(paths) {
-		workerCount = len(paths)
-	}
+	workerCount := min(min(max(runtime.NumCPU(), 1), 4), len(paths))
 
 	type job struct {
 		index int

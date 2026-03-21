@@ -48,11 +48,13 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var shortVersion bool
 	var longVersion bool
 	var verbose bool
+	var maxFileSize int64
 	flags.BoolVar(&shortNoColor, "nc", false, "disable color")
 	flags.BoolVar(&longNoColor, "no-color", false, "disable color")
 	flags.BoolVar(&shortVersion, "v", false, "print version")
 	flags.BoolVar(&longVersion, "version", false, "print version")
-	flags.BoolVar(&verbose, "verbose", false, "print scan summary details")
+	flags.BoolVar(&verbose, "verbose", false, "print detailed structured finding blocks")
+	flags.Int64Var(&maxFileSize, "max-file-size", 0, "skip files larger than this many bytes")
 
 	if err := flags.Parse(args); err != nil {
 		return exitcode.ExecutionError
@@ -61,6 +63,10 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if shortVersion || longVersion {
 		_, _ = fmt.Fprintln(stdout, versionString())
 		return exitcode.Success
+	}
+	if maxFileSize < 0 {
+		_, _ = fmt.Fprintln(stderr, "--max-file-size must be zero or greater")
+		return exitcode.ExecutionError
 	}
 
 	rest := flags.Args()
@@ -75,19 +81,17 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	result, err := app.Run(ctx, app.Options{
-		Path:    path,
-		Stdout:  stdout,
-		Color:   !(shortNoColor || longNoColor),
-		Verbose: verbose,
+		Path:        path,
+		Stdout:      stdout,
+		Color:       !(shortNoColor || longNoColor),
+		Verbose:     verbose,
+		MaxFileSize: maxFileSize,
+		Version:     Version,
 	})
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 		return exitcode.ExecutionError
 	}
-	if result.HadRecoverableErrors {
-		return exitcode.ExecutionError
-	}
-
 	if result.HasFindings {
 		return exitcode.FindingsDetected
 	}
