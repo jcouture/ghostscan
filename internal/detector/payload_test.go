@@ -74,7 +74,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   2,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
 					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
 				},
@@ -107,7 +106,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   2,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload sequence detected: 17 consecutive private-use Unicode characters",
 					Evidence: strings.Repeat("<U+E000>", 17),
 				},
@@ -132,7 +130,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   2,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
 					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
 				},
@@ -141,7 +138,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   19,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload sequence detected: 17 consecutive private-use Unicode characters",
 					Evidence: strings.Repeat("<U+E000>", 17),
 				},
@@ -169,7 +165,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   2,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
 					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
 				},
@@ -178,7 +173,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   20,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
 					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 17),
 				},
@@ -213,7 +207,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   1,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload density detected: 16 suspicious Unicode characters in a 24-character window (invisible)",
 					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8) + "x" + strings.Repeat("<U+200B ZERO WIDTH SPACE>", 8),
 				},
@@ -252,7 +245,6 @@ func TestPayloadDetect(t *testing.T) {
 					Line:     1,
 					Column:   1,
 					RuleID:   PayloadRuleID,
-					Severity: finding.SeverityHigh,
 					Message:  "Suspicious encoded payload density detected: 12 suspicious Unicode characters in a 24-character window (invisible, private-use)",
 					Evidence: strings.Repeat("<U+200B ZERO WIDTH SPACE>", 6) + "x" + strings.Repeat("<U+E000>", 6),
 				},
@@ -274,7 +266,6 @@ func TestPayloadDetect(t *testing.T) {
 					got[index].Line != want.Line ||
 					got[index].Column != want.Column ||
 					got[index].RuleID != want.RuleID ||
-					got[index].Severity != want.Severity ||
 					got[index].Message != want.Message ||
 					got[index].Evidence != want.Evidence {
 					t.Fatalf("findings[%d] = %#v, want %#v", index, got[index], want)

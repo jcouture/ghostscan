@@ -114,9 +114,6 @@ func assertPrivateUseFinding(
 	if got.RuleID != PrivateUseRuleID {
 		t.Fatalf("Finding.RuleID = %q, want %q", got.RuleID, PrivateUseRuleID)
 	}
-	if got.Severity != finding.SeverityMedium {
-		t.Fatalf("Finding.Severity = %q, want %q", got.Severity, finding.SeverityMedium)
-	}
 	if got.Message != wantMessage {
 		t.Fatalf("Finding.Message = %q, want %q", got.Message, wantMessage)
 	}

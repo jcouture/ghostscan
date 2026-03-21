@@ -42,26 +42,26 @@ func TestEngineScanExpandedInvisibleFixtures(t *testing.T) {
 			name:    "file start and end invisibles",
 			fixture: fixturePath("invisible", "file_edges.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 1, evidence: "<U+FEFF ZERO WIDTH NO-BREAK SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 2, column: 21, evidence: "<U+2060 WORD JOINER>"},
+				{ruleID: "unicode/invisible", line: 1, column: 1, evidence: "<U+FEFF ZERO WIDTH NO-BREAK SPACE>"},
+				{ruleID: "unicode/invisible", line: 2, column: 21, evidence: "<U+2060 WORD JOINER>"},
 			},
 		},
 		{
 			name:    "json string mix",
 			fixture: fixturePath("invisible", "json_string_mix.json"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 13, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 29, evidence: "<U+200C ZERO WIDTH NON-JOINER>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 42, evidence: "<U+200D ZERO WIDTH JOINER>"},
+				{ruleID: "unicode/invisible", line: 1, column: 13, evidence: "<U+200B ZERO WIDTH SPACE>"},
+				{ruleID: "unicode/invisible", line: 1, column: 29, evidence: "<U+200C ZERO WIDTH NON-JOINER>"},
+				{ruleID: "unicode/invisible", line: 1, column: 42, evidence: "<U+200D ZERO WIDTH JOINER>"},
 			},
 		},
 		{
 			name:    "identifier and string mix",
 			fixture: fixturePath("invisible", "comment_identifier_mix.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 2, column: 11, evidence: "<U+200D ZERO WIDTH JOINER>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 2, column: 21, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 3, column: 16, evidence: "<U+200C ZERO WIDTH NON-JOINER>"},
+				{ruleID: "unicode/invisible", line: 2, column: 11, evidence: "<U+200D ZERO WIDTH JOINER>"},
+				{ruleID: "unicode/invisible", line: 2, column: 21, evidence: "<U+200B ZERO WIDTH SPACE>"},
+				{ruleID: "unicode/invisible", line: 3, column: 16, evidence: "<U+200C ZERO WIDTH NON-JOINER>"},
 			},
 		},
 	}
@@ -94,24 +94,24 @@ func TestEngineScanExpandedPrivateUseFixtures(t *testing.T) {
 			name:    "bmp private use blob",
 			fixture: fixturePath("privateuse", "bmp_string_blob.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 17, evidence: "<U+E000><U+E001><U+E002>"},
+				{ruleID: "unicode/private-use", line: 1, column: 17, evidence: "<U+E000><U+E001><U+E002>"},
 			},
 		},
 		{
 			name:    "supplementary private use planes",
 			fixture: fixturePath("privateuse", "supplementary_planes.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 7, evidence: "<U+F0000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 2, column: 7, evidence: "<U+100000>"},
+				{ruleID: "unicode/private-use", line: 1, column: 7, evidence: "<U+F0000>"},
+				{ruleID: "unicode/private-use", line: 2, column: 7, evidence: "<U+100000>"},
 			},
 		},
 		{
 			name:    "private use mixed with invisible",
 			fixture: fixturePath("privateuse", "mixed_with_invisible.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 18, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 17, evidence: "<U+E000>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 19, evidence: "<U+E001>"},
+				{ruleID: "unicode/invisible", line: 1, column: 18, evidence: "<U+200B ZERO WIDTH SPACE>"},
+				{ruleID: "unicode/private-use", line: 1, column: 17, evidence: "<U+E000>"},
+				{ruleID: "unicode/private-use", line: 1, column: 19, evidence: "<U+E001>"},
 			},
 		},
 	}
@@ -144,16 +144,16 @@ func TestEngineScanExpandedBidiFixtures(t *testing.T) {
 			name:    "comment rlo",
 			fixture: fixturePath("bidi", "comment_rlo.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 10, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+				{ruleID: "unicode/bidi", line: 1, column: 10, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
 			},
 		},
 		{
 			name:    "mixed same line controls",
 			fixture: fixturePath("bidi", "mixed_controls_same_line.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 15, evidence: "<U+2066 LEFT-TO-RIGHT ISOLATE>"},
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 20, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 25, evidence: "<U+2069 POP DIRECTIONAL ISOLATE>"},
+				{ruleID: "unicode/bidi", line: 1, column: 15, evidence: "<U+2066 LEFT-TO-RIGHT ISOLATE>"},
+				{ruleID: "unicode/bidi", line: 1, column: 20, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+				{ruleID: "unicode/bidi", line: 1, column: 25, evidence: "<U+2069 POP DIRECTIONAL ISOLATE>"},
 			},
 		},
 	}
@@ -187,7 +187,6 @@ func TestEngineScanExpandedPayloadFixtures(t *testing.T) {
 			fixture: fixturePath("payload", "invisible_exact_threshold.txt"),
 			expected: []expectedFinding{{
 				ruleID:   "unicode/invisible",
-				severity: finding.SeverityMedium,
 				line:     1,
 				column:   2,
 				evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 16),
@@ -198,7 +197,6 @@ func TestEngineScanExpandedPayloadFixtures(t *testing.T) {
 			fixture: fixturePath("payload", "privateuse_exact_threshold.txt"),
 			expected: []expectedFinding{{
 				ruleID:   "unicode/private-use",
-				severity: finding.SeverityMedium,
 				line:     1,
 				column:   2,
 				evidence: repeatEvidence("<U+E000>", 16),
@@ -208,18 +206,17 @@ func TestEngineScanExpandedPayloadFixtures(t *testing.T) {
 			name:    "density with invisible bidi and directional controls",
 			fixture: fixturePath("payload", "density_mixed_controls.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 3, evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 4)},
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 8, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 9, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 10, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 1, column: 11, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
-				{ruleID: "unicode/directional-control", severity: finding.SeverityHigh, line: 1, column: 13, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
-				{ruleID: "unicode/directional-control", severity: finding.SeverityHigh, line: 1, column: 14, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
-				{ruleID: "unicode/directional-control", severity: finding.SeverityHigh, line: 1, column: 15, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
-				{ruleID: "unicode/directional-control", severity: finding.SeverityHigh, line: 1, column: 16, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
+				{ruleID: "unicode/invisible", line: 1, column: 3, evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 4)},
+				{ruleID: "unicode/bidi", line: 1, column: 8, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+				{ruleID: "unicode/bidi", line: 1, column: 9, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+				{ruleID: "unicode/bidi", line: 1, column: 10, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+				{ruleID: "unicode/bidi", line: 1, column: 11, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+				{ruleID: "unicode/directional-control", line: 1, column: 13, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
+				{ruleID: "unicode/directional-control", line: 1, column: 14, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
+				{ruleID: "unicode/directional-control", line: 1, column: 15, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
+				{ruleID: "unicode/directional-control", line: 1, column: 16, evidence: "<U+200E LEFT-TO-RIGHT MARK>"},
 				{
 					ruleID:   "unicode/payload",
-					severity: finding.SeverityHigh,
 					line:     1,
 					column:   1,
 					message:  "Suspicious encoded payload density detected: 12 suspicious Unicode characters in a 24-character window (invisible, bidi, directional-control)",
@@ -231,8 +228,8 @@ func TestEngineScanExpandedPayloadFixtures(t *testing.T) {
 			name:    "density below threshold does not emit payload rule",
 			fixture: fixturePath("payload", "density_below_threshold.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 3, evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 5)},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 9, evidence: repeatEvidence("<U+E000>", 6)},
+				{ruleID: "unicode/invisible", line: 1, column: 3, evidence: repeatEvidence("<U+200B ZERO WIDTH SPACE>", 5)},
+				{ruleID: "unicode/private-use", line: 1, column: 9, evidence: repeatEvidence("<U+E000>", 6)},
 			},
 		},
 	}
@@ -267,7 +264,6 @@ func TestEngineScanExpandedDecoderFixtures(t *testing.T) {
 			expected: []expectedFinding{
 				{
 					ruleID:   "unicode/decoder",
-					severity: finding.SeverityMedium,
 					line:     1,
 					column:   20,
 					message:  "Suspicious decoder or dynamic execution pattern detected: eval(",
@@ -275,7 +271,6 @@ func TestEngineScanExpandedDecoderFixtures(t *testing.T) {
 				},
 				{
 					ruleID:   "unicode/decoder",
-					severity: finding.SeverityMedium,
 					line:     2,
 					column:   20,
 					message:  "Suspicious decoder or dynamic execution pattern detected: Buffer.from(",
@@ -289,7 +284,6 @@ func TestEngineScanExpandedDecoderFixtures(t *testing.T) {
 			expected: []expectedFinding{
 				{
 					ruleID:   "unicode/decoder",
-					severity: finding.SeverityMedium,
 					line:     1,
 					column:   1,
 					message:  "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument",
@@ -363,19 +357,10 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 				switch item.RuleID {
 				case "unicode/payload":
 					payloadCount++
-					if item.Severity != finding.SeverityHigh {
-						t.Fatalf("payload severity = %q, want %q", item.Severity, finding.SeverityHigh)
-					}
 				case "unicode/decoder":
 					decoderCount++
-					if item.Severity != finding.SeverityMedium {
-						t.Fatalf("decoder severity = %q, want %q", item.Severity, finding.SeverityMedium)
-					}
 				case "unicode/correlation":
 					correlationCount++
-					if item.Severity != finding.SeverityHigh {
-						t.Fatalf("correlation severity = %q, want %q", item.Severity, finding.SeverityHigh)
-					}
 				}
 			}
 
@@ -406,24 +391,24 @@ func TestEngineScanPositionAndBenignFixtures(t *testing.T) {
 			name:    "multibyte prefix keeps rune columns honest",
 			fixture: fixturePath("positions", "multibyte_prefix_invisible.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 4, evidence: "<U+200B ZERO WIDTH SPACE>"},
+				{ruleID: "unicode/invisible", line: 1, column: 4, evidence: "<U+200B ZERO WIDTH SPACE>"},
 			},
 		},
 		{
 			name:    "first column adjacent mixed findings",
 			fixture: fixturePath("positions", "first_column_and_adjacent.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 1, column: 1, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 1, column: 2, evidence: "<U+E000>"},
-				{ruleID: "unicode/bidi", severity: finding.SeverityHigh, line: 2, column: 2, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+				{ruleID: "unicode/invisible", line: 1, column: 1, evidence: "<U+200B ZERO WIDTH SPACE>"},
+				{ruleID: "unicode/private-use", line: 1, column: 2, evidence: "<U+E000>"},
+				{ruleID: "unicode/bidi", line: 2, column: 2, evidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
 			},
 		},
 		{
 			name:    "crlf fixture preserves line starts",
 			fixture: fixturePath("positions", "crlf_invisible.txt"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", severity: finding.SeverityMedium, line: 2, column: 1, evidence: "<U+200B ZERO WIDTH SPACE>"},
-				{ruleID: "unicode/private-use", severity: finding.SeverityMedium, line: 3, column: 2, evidence: "<U+E000>"},
+				{ruleID: "unicode/invisible", line: 2, column: 1, evidence: "<U+200B ZERO WIDTH SPACE>"},
+				{ruleID: "unicode/private-use", line: 3, column: 2, evidence: "<U+E000>"},
 			},
 		},
 		{
@@ -456,7 +441,6 @@ func TestEngineScanPositionAndBenignFixtures(t *testing.T) {
 
 type expectedFinding struct {
 	ruleID   string
-	severity finding.Severity
 	line     int
 	column   int
 	message  string
@@ -473,9 +457,6 @@ func assertFindingsExactly(t *testing.T, got []finding.Finding, want []expectedF
 	for index := range want {
 		if got[index].RuleID != want[index].ruleID {
 			t.Fatalf("findings[%d].RuleID = %q, want %q", index, got[index].RuleID, want[index].ruleID)
-		}
-		if got[index].Severity != want[index].severity {
-			t.Fatalf("findings[%d].Severity = %q, want %q", index, got[index].Severity, want[index].severity)
 		}
 		if got[index].Line != want[index].line || got[index].Column != want[index].column {
 			t.Fatalf("findings[%d] position = (%d, %d), want (%d, %d)", index, got[index].Line, got[index].Column, want[index].line, want[index].column)

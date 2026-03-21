@@ -108,9 +108,6 @@ func TestDecoderDetectPatterns(t *testing.T) {
 			if got.RuleID != DecoderRuleID {
 				t.Fatalf("RuleID = %q, want %q", got.RuleID, DecoderRuleID)
 			}
-			if got.Severity != finding.SeverityMedium {
-				t.Fatalf("Severity = %q, want %q", got.Severity, finding.SeverityMedium)
-			}
 			if got.Message != tt.wantMessage {
 				t.Fatalf("Message = %q, want %q", got.Message, tt.wantMessage)
 			}
@@ -134,25 +131,22 @@ func TestCorrelateFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		payloadLine  int
-		decoderLine  int
-		wantSeverity finding.Severity
-		wantMessage  string
+		name        string
+		payloadLine int
+		decoderLine int
+		wantMessage string
 	}{
 		{
-			name:         "payload within range",
-			payloadLine:  5,
-			decoderLine:  24,
-			wantSeverity: finding.SeverityHigh,
-			wantMessage:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 19 lines of eval(",
+			name:        "payload within range",
+			payloadLine: 5,
+			decoderLine: 24,
+			wantMessage: "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 19 lines of eval(",
 		},
 		{
-			name:         "payload within 20 lines",
-			payloadLine:  1,
-			decoderLine:  20,
-			wantSeverity: finding.SeverityHigh,
-			wantMessage:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 19 lines of eval(",
+			name:        "payload within 20 lines",
+			payloadLine: 1,
+			decoderLine: 20,
+			wantMessage: "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 19 lines of eval(",
 		},
 	}
 
@@ -165,7 +159,6 @@ func TestCorrelateFile(t *testing.T) {
 				Line:     tt.decoderLine,
 				Column:   1,
 				RuleID:   DecoderRuleID,
-				Severity: finding.SeverityMedium,
 				Message:  "Suspicious decoder or dynamic execution pattern detected: eval(",
 				Evidence: "eval(",
 			}, {
@@ -173,7 +166,6 @@ func TestCorrelateFile(t *testing.T) {
 				Line:     tt.payloadLine,
 				Column:   3,
 				RuleID:   PayloadRuleID,
-				Severity: finding.SeverityHigh,
 				Message:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters",
 				Evidence: "<U+200B ZERO WIDTH SPACE>",
 			}}
@@ -181,9 +173,6 @@ func TestCorrelateFile(t *testing.T) {
 			got := CorrelateFile(findings)
 			if len(got) != 1 {
 				t.Fatalf("len(findings) = %d, want 1", len(got))
-			}
-			if got[0].Severity != tt.wantSeverity {
-				t.Fatalf("Severity = %q, want %q", got[0].Severity, tt.wantSeverity)
 			}
 			if got[0].RuleID != CorrelationRuleID {
 				t.Fatalf("RuleID = %q, want %q", got[0].RuleID, CorrelationRuleID)

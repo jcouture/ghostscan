@@ -55,7 +55,6 @@ func (Bidi) Detect(file File) []finding.Finding {
 			EndLine:   observation.Line,
 			EndColumn: observation.Column,
 			RuleID:    BidiRuleID,
-			Severity:  finding.SeverityHigh,
 			Message:   fmt.Sprintf("Trojan Source bidi control character detected: U+%04X %s", observation.Rune, name),
 			Evidence:  unicodeutil.RenderRune(observation.Rune),
 		})

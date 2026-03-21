@@ -76,7 +76,6 @@ func (Payload) Detect(file File) []finding.Finding {
 			EndLine:   end.Line,
 			EndColumn: end.Column,
 			RuleID:    PayloadRuleID,
-			Severity:  finding.SeverityHigh,
 			Message:   payloadMessage(runClass, len(run)),
 			Evidence:  renderObservationRun(run),
 		})
@@ -214,7 +213,6 @@ func detectPayloadDensity(file File) []finding.Finding {
 			EndLine:   end.Line,
 			EndColumn: end.Column,
 			RuleID:    PayloadRuleID,
-			Severity:  finding.SeverityHigh,
 			Message:   fmt.Sprintf("Suspicious encoded payload density detected: %d suspicious Unicode characters in a %d-character window (%s)", window.suspiciousCount, payloadDensityWindow, joinPayloadClasses(window.classes)),
 			Evidence:  renderPayloadDensityWindow(observations),
 		})

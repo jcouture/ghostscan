@@ -84,7 +84,6 @@ func (Invisible) Detect(file File) []finding.Finding {
 			file.Path,
 			run,
 			InvisibleRuleID,
-			finding.SeverityMedium,
 			"Invisible Unicode sequence detected",
 			"invisible Unicode characters",
 		))

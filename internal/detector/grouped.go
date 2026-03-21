@@ -63,7 +63,6 @@ func groupedUnicodeFinding(
 	path string,
 	run observationRun,
 	ruleID string,
-	severity finding.Severity,
 	singular string,
 	plural string,
 ) finding.Finding {
@@ -77,7 +76,6 @@ func groupedUnicodeFinding(
 		EndLine:   end.Line,
 		EndColumn: end.Column,
 		RuleID:    ruleID,
-		Severity:  severity,
 		Message:   groupedUnicodeMessage(singular, plural, run.observations),
 		Evidence:  renderObservationRun(run.observations),
 	}

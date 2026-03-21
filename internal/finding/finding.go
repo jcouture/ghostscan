@@ -27,7 +27,6 @@ type Finding struct {
 	EndLine   int
 	EndColumn int
 	RuleID    string
-	Severity  Severity
 	Message   string
 	Evidence  string
 	Context   string

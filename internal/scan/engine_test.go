@@ -146,18 +146,17 @@ func TestEngineScanFileBidiFindings(t *testing.T) {
 		wantLine     int
 		wantColumn   int
 		wantRuleID   string
-		wantSeverity string
 		wantEvidence string
 	}{
-		{index: 0, wantLine: 1, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202A LEFT-TO-RIGHT EMBEDDING>"},
-		{index: 1, wantLine: 2, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202B RIGHT-TO-LEFT EMBEDDING>"},
-		{index: 2, wantLine: 3, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202C POP DIRECTIONAL FORMATTING>"},
-		{index: 3, wantLine: 4, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202D LEFT-TO-RIGHT OVERRIDE>"},
-		{index: 4, wantLine: 5, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
-		{index: 5, wantLine: 6, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2066 LEFT-TO-RIGHT ISOLATE>"},
-		{index: 6, wantLine: 7, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2067 RIGHT-TO-LEFT ISOLATE>"},
-		{index: 7, wantLine: 8, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2068 FIRST STRONG ISOLATE>"},
-		{index: 8, wantLine: 9, wantColumn: 2, wantRuleID: "unicode/bidi", wantSeverity: "HIGH", wantEvidence: "<U+2069 POP DIRECTIONAL ISOLATE>"},
+		{index: 0, wantLine: 1, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+202A LEFT-TO-RIGHT EMBEDDING>"},
+		{index: 1, wantLine: 2, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+202B RIGHT-TO-LEFT EMBEDDING>"},
+		{index: 2, wantLine: 3, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+202C POP DIRECTIONAL FORMATTING>"},
+		{index: 3, wantLine: 4, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+202D LEFT-TO-RIGHT OVERRIDE>"},
+		{index: 4, wantLine: 5, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+202E RIGHT-TO-LEFT OVERRIDE>"},
+		{index: 5, wantLine: 6, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+2066 LEFT-TO-RIGHT ISOLATE>"},
+		{index: 6, wantLine: 7, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+2067 RIGHT-TO-LEFT ISOLATE>"},
+		{index: 7, wantLine: 8, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+2068 FIRST STRONG ISOLATE>"},
+		{index: 8, wantLine: 9, wantColumn: 2, wantRuleID: "unicode/bidi", wantEvidence: "<U+2069 POP DIRECTIONAL ISOLATE>"},
 	}
 
 	for _, tt := range tests {
@@ -173,9 +172,6 @@ func TestEngineScanFileBidiFindings(t *testing.T) {
 		}
 		if findings[tt.index].RuleID != tt.wantRuleID {
 			t.Fatalf("findings[%d].RuleID = %q, want %q", tt.index, findings[tt.index].RuleID, tt.wantRuleID)
-		}
-		if string(findings[tt.index].Severity) != tt.wantSeverity {
-			t.Fatalf("findings[%d].Severity = %q, want %q", tt.index, findings[tt.index].Severity, tt.wantSeverity)
 		}
 		if findings[tt.index].Evidence != tt.wantEvidence {
 			t.Fatalf("findings[%d].Evidence = %q, want %q", tt.index, findings[tt.index].Evidence, tt.wantEvidence)
@@ -223,7 +219,6 @@ func TestEngineScanFileMixedScriptFindings(t *testing.T) {
 		wantLine     int
 		wantColumn   int
 		wantRuleID   string
-		wantSeverity string
 		wantMessage  string
 		wantEvidence string
 	}{
@@ -232,7 +227,6 @@ func TestEngineScanFileMixedScriptFindings(t *testing.T) {
 			wantLine:     1,
 			wantColumn:   7,
 			wantRuleID:   "unicode/mixed-script",
-			wantSeverity: "HIGH",
 			wantMessage:  "Suspicious mixed-script token detected: token mixes Latin with Cyrillic letters",
 			wantEvidence: "\"validateUsеr\" (е(U+0435 Cyrillic))",
 		},
@@ -241,7 +235,6 @@ func TestEngineScanFileMixedScriptFindings(t *testing.T) {
 			wantLine:     2,
 			wantColumn:   7,
 			wantRuleID:   "unicode/mixed-script",
-			wantSeverity: "HIGH",
 			wantMessage:  "Suspicious mixed-script token detected: token mixes Latin with Greek letters",
 			wantEvidence: "\"pαssword\" (α(U+03B1 Greek))",
 		},
@@ -260,9 +253,6 @@ func TestEngineScanFileMixedScriptFindings(t *testing.T) {
 		}
 		if findings[tt.index].RuleID != tt.wantRuleID {
 			t.Fatalf("findings[%d].RuleID = %q, want %q", tt.index, findings[tt.index].RuleID, tt.wantRuleID)
-		}
-		if string(findings[tt.index].Severity) != tt.wantSeverity {
-			t.Fatalf("findings[%d].Severity = %q, want %q", tt.index, findings[tt.index].Severity, tt.wantSeverity)
 		}
 		if findings[tt.index].Message != tt.wantMessage {
 			t.Fatalf("findings[%d].Message = %q, want %q", tt.index, findings[tt.index].Message, tt.wantMessage)
@@ -307,9 +297,6 @@ func TestEngineScanFileCombiningMarkFindings(t *testing.T) {
 	}
 	if findings[0].RuleID != "unicode/combining-mark" {
 		t.Fatalf("findings[0].RuleID = %q, want unicode/combining-mark", findings[0].RuleID)
-	}
-	if string(findings[0].Severity) != "MEDIUM" {
-		t.Fatalf("findings[0].Severity = %q, want MEDIUM", findings[0].Severity)
 	}
 	if findings[0].Evidence != "\"café\" (<U+0301>)" {
 		t.Fatalf("findings[0].Evidence = %q, want combining mark evidence", findings[0].Evidence)
@@ -362,9 +349,6 @@ func TestEngineScanFileDirectionalControlFindings(t *testing.T) {
 		}
 		if findings[tt.index].RuleID != "unicode/directional-control" {
 			t.Fatalf("findings[%d].RuleID = %q, want unicode/directional-control", tt.index, findings[tt.index].RuleID)
-		}
-		if string(findings[tt.index].Severity) != "HIGH" {
-			t.Fatalf("findings[%d].Severity = %q, want HIGH", tt.index, findings[tt.index].Severity)
 		}
 		if findings[tt.index].Evidence != tt.wantEvidence {
 			t.Fatalf("findings[%d].Evidence = %q, want %q", tt.index, findings[tt.index].Evidence, tt.wantEvidence)
@@ -574,9 +558,6 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 					message:  item.Message,
 					evidence: item.Evidence,
 				})
-				if string(item.Severity) != "HIGH" {
-					t.Fatalf("payload severity = %q, want HIGH", item.Severity)
-				}
 			}
 
 			if len(payloadFindings) != len(tt.wantFindings) {
@@ -623,10 +604,6 @@ func TestEngineScanFileDecoderFixtures(t *testing.T) {
 			message:  item.Message,
 			evidence: item.Evidence,
 		})
-
-		if string(item.Severity) != "MEDIUM" {
-			t.Fatalf("decoder severity = %q, want MEDIUM", item.Severity)
-		}
 	}
 
 	want := []struct {
@@ -678,22 +655,19 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 	engine := NewEngine()
 
 	tests := []struct {
-		name         string
-		fixture      string
-		wantSeverity string
-		wantMessage  string
+		name        string
+		fixture     string
+		wantMessage string
 	}{
 		{
-			name:         "payload within 20 lines",
-			fixture:      "correlated_decoder_near_payload.js",
-			wantSeverity: "HIGH",
-			wantMessage:  "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 20 lines of eval(",
+			name:        "payload within 20 lines",
+			fixture:     "correlated_decoder_near_payload.js",
+			wantMessage: "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 20 lines of eval(",
 		},
 		{
-			name:         "payload outside correlation window for far fixture",
-			fixture:      "correlated_decoder_far_payload.js",
-			wantSeverity: "",
-			wantMessage:  "",
+			name:        "payload outside correlation window for far fixture",
+			fixture:     "correlated_decoder_far_payload.js",
+			wantMessage: "",
 		},
 	}
 
@@ -707,9 +681,8 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 			}
 
 			var correlationFinding *struct {
-				line     int
-				severity string
-				message  string
+				line    int
+				message string
 			}
 			for _, item := range findings {
 				if item.RuleID != "unicode/correlation" {
@@ -717,18 +690,16 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 				}
 
 				correlationFinding = &struct {
-					line     int
-					severity string
-					message  string
+					line    int
+					message string
 				}{
-					line:     item.Line,
-					severity: string(item.Severity),
-					message:  item.Message,
+					line:    item.Line,
+					message: item.Message,
 				}
 				break
 			}
 
-			if tt.wantSeverity == "" {
+			if tt.wantMessage == "" {
 				if correlationFinding != nil {
 					t.Fatalf("correlation finding = %#v, want none", correlationFinding)
 				}
@@ -736,9 +707,6 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 			}
 			if correlationFinding == nil {
 				t.Fatal("correlation finding = nil, want finding")
-			}
-			if correlationFinding.severity != tt.wantSeverity {
-				t.Fatalf("correlation severity = %q, want %q", correlationFinding.severity, tt.wantSeverity)
 			}
 			if correlationFinding.message != tt.wantMessage {
 				t.Fatalf("correlation message = %q, want %q", correlationFinding.message, tt.wantMessage)

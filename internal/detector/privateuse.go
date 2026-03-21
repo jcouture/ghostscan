@@ -44,7 +44,6 @@ func (PrivateUse) Detect(file File) []finding.Finding {
 			file.Path,
 			run,
 			PrivateUseRuleID,
-			finding.SeverityMedium,
 			"Private-use Unicode sequence detected",
 			"private-use Unicode characters",
 		))

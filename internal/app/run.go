@@ -133,7 +133,7 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 	jobs := make(chan job)
 	results := make(chan fileScanResult, len(paths))
 
-	for worker := 0; worker < workerCount; worker++ {
+	for range workerCount {
 		go func() {
 			for job := range jobs {
 				result, err := engine.ScanFileDetailed(ctx, job.path)

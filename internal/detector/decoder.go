@@ -53,7 +53,6 @@ func (Decoder) Detect(file File) []finding.Finding {
 			EndLine:   marker.Line,
 			EndColumn: marker.Column + len(marker.Marker) - 1,
 			RuleID:    DecoderRuleID,
-			Severity:  finding.SeverityMedium,
 			Message:   marker.Message,
 			Evidence:  marker.Evidence,
 		})
@@ -82,7 +81,6 @@ func CorrelateFile(findings []finding.Finding) []finding.Finding {
 			EndLine:   payload.EndLine,
 			EndColumn: payload.EndColumn,
 			RuleID:    CorrelationRuleID,
-			Severity:  finding.SeverityHigh,
 			Message:   fmt.Sprintf("%s within %d lines of %s", payload.Message, lineDistance(payload.Line, decoder.Line), decoder.Evidence),
 			Evidence:  fmt.Sprintf("payload: %s | marker: %s", payload.Evidence, decoder.Evidence),
 		})

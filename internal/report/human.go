@@ -74,14 +74,8 @@ type reportModel struct {
 
 type summary struct {
 	totalFindings int
-	severities    []severityCount
 	skippedTotal  int
 	statusLine    string
-}
-
-type severityCount struct {
-	severity finding.Severity
-	count    int
 }
 
 type fileReport struct {
@@ -92,7 +86,6 @@ type fileReport struct {
 type renderedFinding struct {
 	Path        string
 	RuleID      string
-	Severity    finding.Severity
 	Title       string
 	Line        int
 	Column      int
@@ -185,26 +178,6 @@ func versionLabel(version string) string {
 }
 
 func buildSummary(findings []renderedFinding, runtime RuntimeStats) summary {
-	ordered := []finding.Severity{
-		finding.SeverityCritical,
-		finding.SeverityHigh,
-		finding.SeverityMedium,
-		finding.SeverityLow,
-	}
-
-	counts := make(map[finding.Severity]int, len(ordered))
-	for _, item := range findings {
-		counts[item.Severity]++
-	}
-
-	severities := make([]severityCount, 0, len(ordered))
-	for _, severity := range ordered {
-		severities = append(severities, severityCount{
-			severity: severity,
-			count:    counts[severity],
-		})
-	}
-
 	skippedTotal := 0
 	for _, item := range runtime.SkippedByReason {
 		skippedTotal += item.Value
@@ -212,16 +185,8 @@ func buildSummary(findings []renderedFinding, runtime RuntimeStats) summary {
 
 	return summary{
 		totalFindings: len(findings),
-		severities:    severities,
 		skippedTotal:  skippedTotal,
-		statusLine: fmt.Sprintf(
-			"ghostscan_result: findings=%d critical=%d high=%d medium=%d low=%d",
-			len(findings),
-			counts[finding.SeverityCritical],
-			counts[finding.SeverityHigh],
-			counts[finding.SeverityMedium],
-			counts[finding.SeverityLow],
-		),
+		statusLine:    fmt.Sprintf("ghostscan_result: findings=%d", len(findings)),
 	}
 }
 
@@ -420,7 +385,6 @@ func newCorrelationFinding(item finding.Finding, decoders []finding.Finding, dec
 	return renderedFinding{
 		Path:        item.Path,
 		RuleID:      item.RuleID,
-		Severity:    item.Severity,
 		Title:       "hidden unicode payload sequence + decoder pattern",
 		Line:        item.Line,
 		Column:      item.Column,
@@ -452,7 +416,6 @@ func newRenderedFinding(item finding.Finding) renderedFinding {
 	rendered := renderedFinding{
 		Path:        item.Path,
 		RuleID:      item.RuleID,
-		Severity:    item.Severity,
 		Title:       titleForFinding(item),
 		Line:        item.Line,
 		Column:      item.Column,
@@ -559,9 +522,6 @@ func sortRenderedFindings(findings []renderedFinding) {
 		if findings[i].Path != findings[j].Path {
 			return findings[i].Path < findings[j].Path
 		}
-		if severityRank(findings[i].Severity) != severityRank(findings[j].Severity) {
-			return severityRank(findings[i].Severity) < severityRank(findings[j].Severity)
-		}
 		if findings[i].Line != findings[j].Line {
 			return findings[i].Line < findings[j].Line
 		}
@@ -633,7 +593,7 @@ func (r *HumanReporter) writeSummary(model reportModel) error {
 	if err := r.writer.blankLine(); err != nil {
 		return err
 	}
-	return r.writer.linef("findings: %s (%s)", formatInt(model.summary.totalFindings), formatSeverityBreakdown(model.summary.severities))
+	return r.writer.linef("findings: %s", formatInt(model.summary.totalFindings))
 }
 
 func (r *HumanReporter) writeDefaultFile(file fileReport) error {
@@ -644,7 +604,7 @@ func (r *HumanReporter) writeDefaultFile(file fileReport) error {
 		if err := r.writer.blankLine(); err != nil {
 			return err
 		}
-		if err := r.writer.linef("  [%s] %s", r.renderSeverity(item.Severity), item.Title); err != nil {
+		if err := r.writer.linef("  %s", r.palette.finding(item.Title)); err != nil {
 			return err
 		}
 		if err := r.writer.linef("    line %d, column %d", item.Line, item.Column); err != nil {
@@ -655,10 +615,7 @@ func (r *HumanReporter) writeDefaultFile(file fileReport) error {
 }
 
 func (r *HumanReporter) writeVerboseFinding(item renderedFinding) error {
-	if err := r.writeField("Finding", titleCase(item.Title)); err != nil {
-		return err
-	}
-	if err := r.writeField("Severity", r.renderSeverity(item.Severity)); err != nil {
+	if err := r.writeField("Finding", r.palette.finding(titleCase(item.Title))); err != nil {
 		return err
 	}
 	if err := r.writeField("RuleID", item.RuleID); err != nil {
@@ -728,22 +685,6 @@ func (r *HumanReporter) writeBlock(label, value string) error {
 		}
 	}
 	return nil
-}
-
-func (r *HumanReporter) renderSeverity(severity finding.Severity) string {
-	label := string(severity)
-	switch severity {
-	case finding.SeverityCritical:
-		return r.palette.critical(label)
-	case finding.SeverityHigh:
-		return r.palette.high(label)
-	case finding.SeverityMedium:
-		return r.palette.medium(label)
-	case finding.SeverityLow:
-		return r.palette.low(label)
-	default:
-		return label
-	}
 }
 
 func formatBytes(size int64) string {
@@ -817,14 +758,6 @@ func formatSkipBreakdown(counts []Count) string {
 	return strings.Join(parts, ", ")
 }
 
-func formatSeverityBreakdown(counts []severityCount) string {
-	parts := make([]string, 0, len(counts))
-	for _, item := range counts {
-		parts = append(parts, fmt.Sprintf("%s: %d", strings.ToLower(string(item.severity)), item.count))
-	}
-	return strings.Join(parts, ", ")
-}
-
 func formatInt(value int) string {
 	text := strconv.Itoa(value)
 	if value < 1000 {
@@ -862,21 +795,6 @@ func lineDistance(left, right int) int {
 		return left - right
 	}
 	return right - left
-}
-
-func severityRank(severity finding.Severity) int {
-	switch severity {
-	case finding.SeverityCritical:
-		return 0
-	case finding.SeverityHigh:
-		return 1
-	case finding.SeverityMedium:
-		return 2
-	case finding.SeverityLow:
-		return 3
-	default:
-		return 4
-	}
 }
 
 func plural(value int) string {

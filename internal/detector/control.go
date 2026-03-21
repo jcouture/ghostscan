@@ -55,7 +55,6 @@ func (Control) Detect(file File) []finding.Finding {
 			EndLine:   observation.Line,
 			EndColumn: observation.Column,
 			RuleID:    ControlRuleID,
-			Severity:  finding.SeverityHigh,
 			Message:   fmt.Sprintf("Suspicious directional control character detected: U+%04X %s", observation.Rune, name),
 			Evidence:  unicodeutil.RenderRune(observation.Rune),
 		})

@@ -48,7 +48,6 @@ func TestCombiningMarkDetect(t *testing.T) {
 					Line:     1,
 					Column:   1,
 					RuleID:   CombiningMarkRuleID,
-					Severity: finding.SeverityMedium,
 					Message:  "Combining mark detected in token-like text",
 					Evidence: "\"café\" (<U+0301>)",
 				},

@@ -98,7 +98,6 @@ func detectCombiningMarkToken(path string, token []Observation) (finding.Finding
 		Line:     token[0].Line,
 		Column:   token[0].Column,
 		RuleID:   CombiningMarkRuleID,
-		Severity: finding.SeverityMedium,
 		Message:  "Combining mark detected in token-like text",
 		Evidence: fmt.Sprintf("%q (%s)", observationsText(token), strings.Join(marks, ", ")),
 	}, true
