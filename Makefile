@@ -80,6 +80,7 @@ vulncheck:
 
 ## Tidy modules (writes go.mod/go.sum if needed)
 tidy:
+	@go get -u ./...
 	@go mod tidy -v
 
 ## Pre-commit checks (writes fmt/tidy)
@@ -102,6 +103,7 @@ tag:
 clean:
 	@echo "GOCACHE_DIR=$(GOCACHE_DIR)"
 	@rm -rf "$(BIN_DIR)" dist/ "$(GOCACHE_DIR)"
+	@if [ -d .gomodcache ]; then chmod -R u+w .gomodcache && rm -rf .gomodcache; fi
 	@go clean -cache -testcache
 	@echo "Cleaned build artifacts"
 

@@ -23,6 +23,7 @@ package report
 import (
 	"bytes"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -48,22 +49,26 @@ func TestWriteHumanCleanDefaultOutput(t *testing.T) {
 		t.Fatalf("WriteHuman() error = %v", err)
 	}
 
-	want := "" +
-		"ghostscan dev\n" +
-		"\n" +
-		"scanned 12 files (1.5 KB) in 842ms\n" +
-		"skipped 7 files (binary: 2, excluded: 4, oversize: 1)\n" +
-		"\n" +
-		"OK no suspicious unicode patterns found\n" +
-		"\n" +
-		"ghostscan_result: findings=0\n"
-
-	if diff := compareOutput(buf.String(), want); diff != "" {
-		t.Fatalf("clean output mismatch:\n%s", diff)
+	output := buf.String()
+	for _, needle := range []string{
+		"ghostscan dev\n\n",
+		"INF scanned 12 files (1.5 KB) in 842ms",
+		"INF skipped 7 files (binary: 2, excluded: 4, oversize: 1)",
+		"INF OK no suspicious unicode patterns found",
+	} {
+		if !strings.Contains(output, needle) {
+			t.Fatalf("clean output = %q, want substring %q", output, needle)
+		}
+	}
+	if strings.Contains(output, "ghostscan_result:") {
+		t.Fatalf("clean output = %q, want no ghostscan_result footer", output)
+	}
+	if !hasConsoleLogTimestamp(output) {
+		t.Fatalf("clean output = %q, want zerolog-style timestamped lines", output)
 	}
 }
 
-func TestWriteHumanDefaultGroupsFindingsByFile(t *testing.T) {
+func TestWriteHumanDefaultOutputSummarizesFindingsOnly(t *testing.T) {
 	t.Parallel()
 
 	findings := []finding.Finding{
@@ -114,33 +119,26 @@ func TestWriteHumanDefaultGroupsFindingsByFile(t *testing.T) {
 		t.Fatalf("WriteHuman() error = %v", err)
 	}
 
-	want := "" +
-		"ghostscan dev\n" +
-		"\n" +
-		"scanned 3 files (4.1 KB) in 120ms\n" +
-		"skipped 1 files (binary: 1)\n" +
-		"\n" +
-		"findings: 3\n" +
-		"\n" +
-		"────────────────────────────────────────\n" +
-		"\n" +
-		"cmd/render/main.go\n" +
-		"\n" +
-		"  contiguous zero-width unicode sequence (length: 6)\n" +
-		"    line 133, column 14\n" +
-		"\n" +
-		"internal/auth/handler.go\n" +
-		"\n" +
-		"  Trojan Source bidi control character\n" +
-		"    line 41, column 17\n" +
-		"\n" +
-		"  Trojan Source bidi control character\n" +
-		"    line 57, column 9\n" +
-		"\n" +
-		"ghostscan_result: findings=3\n"
-
-	if diff := compareOutput(buf.String(), want); diff != "" {
-		t.Fatalf("default grouped output mismatch:\n%s", diff)
+	output := buf.String()
+	for _, needle := range []string{
+		"ghostscan dev",
+		"INF scanned 3 files (4.1 KB) in 120ms",
+		"INF skipped 1 files (binary: 1)",
+		"WRN suspicious pattern found: 3",
+	} {
+		if !strings.Contains(output, needle) {
+			t.Fatalf("default summary output = %q, want substring %q", output, needle)
+		}
+	}
+	for _, needle := range []string{
+		"cmd/render/main.go",
+		"Trojan Source bidi control character",
+		"contiguous zero-width unicode sequence",
+		"ghostscan_result:",
+	} {
+		if strings.Contains(output, needle) {
+			t.Fatalf("default summary output = %q, want no substring %q", output, needle)
+		}
 	}
 }
 
@@ -191,19 +189,25 @@ func TestWriteHumanVerboseOutputIncludesStructuredFields(t *testing.T) {
 	output := buf.String()
 	for _, needle := range []string{
 		"Finding:     Trojan Source bidi control character",
+		"Evidence:    <U+202E RIGHT-TO-LEFT OVERRIDE>",
 		"RuleID:      unicode/bidi",
 		"Character:   <U+202E RIGHT-TO-LEFT OVERRIDE>",
 		"Explanation:\n  visual order differs from logical execution order",
 		"Fingerprint: internal/auth/handler.go:unicode/bidi:41:17",
 		"Finding:     Contiguous zero-width unicode sequence (length: 4)",
+		"Evidence:    <U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200D ZERO WIDTH JOINER><U+2060 WORD JOINER>",
 		"Count:       4 suspicious runes",
 		"Category:    invisible unicode",
 		"Context:\n  const payload = \"<U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200D ZERO WIDTH JOINER>...\"",
-		"ghostscan_result: findings=2",
+		"INF scanned 2 files (200 B) in 10ms",
+		"INF skipped 5 files (excluded: 5)",
 	} {
 		if !strings.Contains(output, needle) {
 			t.Fatalf("verbose output = %q, want substring %q", output, needle)
 		}
+	}
+	if strings.Contains(output, "ghostscan_result:") {
+		t.Fatalf("verbose output = %q, want no ghostscan_result footer", output)
 	}
 }
 
@@ -309,9 +313,6 @@ func (w *failingWriter) Write(p []byte) (int, error) {
 	return 0, w.err
 }
 
-func compareOutput(got, want string) string {
-	if got == want {
-		return ""
-	}
-	return "got:\n" + got + "\nwant:\n" + want
+func hasConsoleLogTimestamp(output string) bool {
+	return regexp.MustCompile(`(?m)^\d{1,2}:\d{2}(AM|PM) INF `).MatchString(output)
 }

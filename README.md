@@ -58,6 +58,43 @@ Print structured finding blocks with evidence, context, and fingerprints:
 ghostscan --verbose .
 ```
 
+Default output is summary-only. When the scan is clean, it looks like this:
+
+```text
+ghostscan v0.1.0-5-gc456376-dirty
+
+2:11PM INF scanned 1 files (98 B) in 97µs
+2:11PM INF skipped 0 files (none)
+2:11PM INF OK no suspicious unicode patterns found
+```
+
+When findings exist and `--verbose` is not set, the default output stays compact:
+
+```text
+ghostscan v0.1.0-5-gc456376-dirty
+
+2:11PM INF scanned 1 files (98 B) in 97µs
+2:11PM INF skipped 0 files (none)
+2:11PM WRN suspicious pattern found: 2
+```
+
+Use `--verbose` to print per-finding blocks:
+
+```text
+ghostscan v0.1.0-5-gc456376-dirty
+
+Finding:     Decoder pattern "eval("
+Evidence:    eval(
+RuleID:      unicode/decoder
+File:        /path/to/file.js
+Line:        12
+Column:      8
+Category:    decoder pattern
+Context:
+  // migration note: eval(payload)
+Fingerprint: /path/to/file.js:unicode/decoder:12:8
+```
+
 Lower the file size limit for a scan:
 
 ```bash
@@ -92,9 +129,9 @@ Typical uses:
 - Correlates hidden Unicode payloads with nearby decoder or dynamic execution markers
 - Detects mixed-script identifiers that look legitimate at a glance
 - Detects combining marks inside token-like text
-- Produces a compact default terminal report grouped by file
-- Produces structured verbose finding blocks with rule IDs, evidence, context, and fingerprints
-- Prints a deterministic final `ghostscan_result:` status line for CI and grep-friendly logs
+- Produces concise default terminal summary logs
+- Produces structured verbose finding blocks with rule IDs, evidence, context, and fingerprints when `--verbose` is enabled
+- Uses zerolog console output for summary log lines
 - Skips common generated or dependency folders such as `.git`, `node_modules`, and `vendor`
 - Skips binary files and files larger than 5 MB by default, with `--max-file-size` available when you need a stricter limit
 

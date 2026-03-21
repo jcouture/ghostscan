@@ -136,11 +136,17 @@ func TestRunRendersIncidentReport(t *testing.T) {
 	if !strings.Contains(output, "scanned 9 files") {
 		t.Fatalf("stdout = %q, want scanned file count", output)
 	}
-	if !strings.Contains(output, "hidden unicode payload sequence + decoder pattern") {
-		t.Fatalf("stdout = %q, want correlation incident", output)
+	if !strings.Contains(output, "INF scanned 9 files") {
+		t.Fatalf("stdout = %q, want scan summary log", output)
 	}
-	if !strings.Contains(output, "ghostscan_result: findings=") {
-		t.Fatalf("stdout = %q, want final status line", output)
+	if !strings.Contains(output, "WRN suspicious pattern found:") {
+		t.Fatalf("stdout = %q, want findings warning summary", output)
+	}
+	if strings.Contains(output, "hidden unicode payload sequence + decoder pattern") {
+		t.Fatalf("stdout = %q, want no detailed findings without verbose", output)
+	}
+	if strings.Contains(output, "ghostscan_result:") {
+		t.Fatalf("stdout = %q, want no ghostscan_result footer", output)
 	}
 }
 

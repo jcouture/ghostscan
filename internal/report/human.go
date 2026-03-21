@@ -21,6 +21,7 @@
 package report
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"sort"
@@ -31,6 +32,7 @@ import (
 
 	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
+	"github.com/rs/zerolog"
 )
 
 const correlationDistanceLines = 20
@@ -61,6 +63,7 @@ type Count struct {
 type HumanReporter struct {
 	writer  reportWriter
 	palette palette
+	color   bool
 }
 
 type reportModel struct {
@@ -75,7 +78,6 @@ type reportModel struct {
 type summary struct {
 	totalFindings int
 	skippedTotal  int
-	statusLine    string
 }
 
 type fileReport struct {
@@ -103,6 +105,7 @@ func NewHumanReporter(w io.Writer, opts Options) *HumanReporter {
 	return &HumanReporter{
 		writer:  newReportWriter(w),
 		palette: newPalette(opts.Color),
+		color:   opts.Color,
 	}
 }
 
@@ -113,45 +116,28 @@ func WriteHuman(w io.Writer, findings []finding.Finding, opts Options) error {
 func (r *HumanReporter) Write(findings []finding.Finding, opts Options) error {
 	model := buildReport(findings, opts)
 
-	if err := r.writeSummary(model); err != nil {
+	if err := r.writeVersion(model.version); err != nil {
 		return fmt.Errorf("write report header: %w", err)
 	}
 
-	if model.summary.totalFindings > 0 {
-		if model.verbose {
-			for index, item := range model.findings {
-				if index > 0 {
-					if err := r.writer.blankLine(); err != nil {
-						return fmt.Errorf("write finding separator: %w", err)
-					}
-				}
-				if err := r.writeVerboseFinding(item); err != nil {
-					return fmt.Errorf("write finding block: %w", err)
-				}
-			}
-		} else {
-			if err := r.writer.blankLine(); err != nil {
-				return fmt.Errorf("write findings separator: %w", err)
-			}
-			if err := r.writer.linef(strings.Repeat("─", 40)); err != nil {
-				return fmt.Errorf("write divider: %w", err)
-			}
-			for _, file := range model.files {
+	if model.summary.totalFindings > 0 && model.verbose {
+		for index, item := range model.findings {
+			if index > 0 {
 				if err := r.writer.blankLine(); err != nil {
-					return fmt.Errorf("write file separator: %w", err)
-				}
-				if err := r.writeDefaultFile(file); err != nil {
-					return fmt.Errorf("write file group: %w", err)
+					return fmt.Errorf("write finding separator: %w", err)
 				}
 			}
+			if err := r.writeVerboseFinding(item); err != nil {
+				return fmt.Errorf("write finding block: %w", err)
+			}
+		}
+		if err := r.writer.blankLine(); err != nil {
+			return fmt.Errorf("write runtime separator: %w", err)
 		}
 	}
 
-	if err := r.writer.blankLine(); err != nil {
-		return fmt.Errorf("write final separator: %w", err)
-	}
-	if err := r.writer.linef(model.summary.statusLine); err != nil {
-		return fmt.Errorf("write final status: %w", err)
+	if err := r.writeRuntimeSummary(model); err != nil {
+		return fmt.Errorf("write runtime summary: %w", err)
 	}
 
 	return nil
@@ -186,7 +172,6 @@ func buildSummary(findings []renderedFinding, runtime RuntimeStats) summary {
 	return summary{
 		totalFindings: len(findings),
 		skippedTotal:  skippedTotal,
-		statusLine:    fmt.Sprintf("ghostscan_result: findings=%d", len(findings)),
 	}
 }
 
@@ -553,70 +538,97 @@ func groupRenderedFindings(findings []renderedFinding) []fileReport {
 	return files
 }
 
-func (r *HumanReporter) writeSummary(model reportModel) error {
-	if err := r.writer.linef(model.version); err != nil {
+func newConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
+	console := zerolog.ConsoleWriter{
+		Out:        w,
+		TimeFormat: "3:04PM",
+		NoColor:    !color,
+	}
+	console.PartsOrder = []string{"time", "level", "message"}
+	console.FormatMessage = func(value any) string {
+		return fmt.Sprint(value)
+	}
+	return console
+}
+
+func (r *HumanReporter) writeVersion(version string) error {
+	if err := r.writer.linef(version); err != nil {
 		return err
 	}
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	if err := r.writer.linef(
-		"scanned %s files (%s) in %s",
-		formatInt(model.runtime.FilesScanned),
-		formatBytes(model.runtime.BytesScanned),
-		formatDuration(model.runtime.ScanDuration),
+	return r.writer.blankLine()
+}
+
+func (r *HumanReporter) writeRuntimeSummary(model reportModel) error {
+	if err := r.writeInfo(
+		fmt.Sprintf(
+			"scanned %s files (%s) in %s",
+			formatInt(model.runtime.FilesScanned),
+			formatBytes(model.runtime.BytesScanned),
+			formatDuration(model.runtime.ScanDuration),
+		),
 	); err != nil {
 		return err
 	}
-	if err := r.writer.linef(
-		"skipped %s files (%s)",
-		formatInt(model.summary.skippedTotal),
-		formatSkipBreakdown(model.runtime.SkippedByReason),
+	if err := r.writeInfo(
+		fmt.Sprintf(
+			"skipped %s files (%s)",
+			formatInt(model.summary.skippedTotal),
+			formatSkipBreakdown(model.runtime.SkippedByReason),
+		),
 	); err != nil {
 		return err
 	}
 	if model.runtime.RecoverableFileErrors > 0 {
-		if err := r.writer.linef(
-			"warnings: %s file scan error%s",
-			formatInt(model.runtime.RecoverableFileErrors),
-			plural(model.runtime.RecoverableFileErrors),
+		if err := r.writeWarn(
+			fmt.Sprintf(
+				"%s file scan error%s",
+				formatInt(model.runtime.RecoverableFileErrors),
+				plural(model.runtime.RecoverableFileErrors),
+			),
 		); err != nil {
 			return err
 		}
 	}
 	if model.summary.totalFindings == 0 {
-		if err := r.writer.blankLine(); err != nil {
+		if err := r.writeInfo(fmt.Sprintf("%s no suspicious unicode patterns found", r.palette.ok("OK"))); err != nil {
 			return err
 		}
-		return r.writer.linef("%s no suspicious unicode patterns found", r.palette.ok("OK"))
-	}
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	return r.writer.linef("findings: %s", formatInt(model.summary.totalFindings))
-}
-
-func (r *HumanReporter) writeDefaultFile(file fileReport) error {
-	if err := r.writer.linef(file.path); err != nil {
-		return err
-	}
-	for _, item := range file.findings {
-		if err := r.writer.blankLine(); err != nil {
-			return err
-		}
-		if err := r.writer.linef("  %s", r.palette.finding(item.Title)); err != nil {
-			return err
-		}
-		if err := r.writer.linef("    line %d, column %d", item.Line, item.Column); err != nil {
+	} else if !model.verbose {
+		if err := r.writeWarn(r.palette.finding(fmt.Sprintf("suspicious pattern found: %d", model.summary.totalFindings))); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func (r *HumanReporter) writeInfo(message string) error {
+	return r.writeLog(func(logger zerolog.Logger) {
+		logger.Info().Msg(message)
+	})
+}
+
+func (r *HumanReporter) writeWarn(message string) error {
+	return r.writeLog(func(logger zerolog.Logger) {
+		logger.Warn().Msg(message)
+	})
+}
+
+func (r *HumanReporter) writeLog(emit func(logger zerolog.Logger)) error {
+	var buffer bytes.Buffer
+	logger := zerolog.New(newConsoleWriter(&buffer, r.color)).With().Timestamp().Logger()
+	emit(logger)
+	_, err := io.Copy(r.writer.w, &buffer)
+	return err
+}
+
 func (r *HumanReporter) writeVerboseFinding(item renderedFinding) error {
 	if err := r.writeField("Finding", r.palette.finding(titleCase(item.Title))); err != nil {
 		return err
+	}
+	if item.Evidence != "" {
+		if err := r.writeField("Evidence", item.Evidence); err != nil {
+			return err
+		}
 	}
 	if err := r.writeField("RuleID", item.RuleID); err != nil {
 		return err
@@ -630,16 +642,8 @@ func (r *HumanReporter) writeVerboseFinding(item renderedFinding) error {
 	if err := r.writeField("Column", strconv.Itoa(item.Column)); err != nil {
 		return err
 	}
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
 	if item.Character != "" {
 		if err := r.writeField("Character", item.Character); err != nil {
-			return err
-		}
-	}
-	if item.Evidence != "" {
-		if err := r.writeField("Evidence", item.Evidence); err != nil {
 			return err
 		}
 	}
@@ -672,7 +676,7 @@ func (r *HumanReporter) writeVerboseFinding(item renderedFinding) error {
 }
 
 func (r *HumanReporter) writeField(label, value string) error {
-	return r.writer.linef("%-12s %s", label+":", value)
+	return r.writer.linef("%s %s", r.palette.label(fmt.Sprintf("%-12s", label+":")), value)
 }
 
 func (r *HumanReporter) writeBlock(label, value string) error {

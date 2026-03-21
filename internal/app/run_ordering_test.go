@@ -38,8 +38,9 @@ func TestRunSortsAggregatedFindingsBeforeReporting(t *testing.T) {
 
 	var stdout bytes.Buffer
 	result, err := Run(context.Background(), Options{
-		Path:   root,
-		Stdout: &stdout,
+		Path:    root,
+		Stdout:  &stdout,
+		Verbose: true,
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)

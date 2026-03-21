@@ -24,6 +24,7 @@ import "github.com/fatih/color"
 
 type palette struct {
 	finding func(a ...any) string
+	label   func(a ...any) string
 	ok      func(a ...any) string
 }
 
@@ -31,17 +32,21 @@ func newPalette(enabled bool) palette {
 	if !enabled {
 		return palette{
 			finding: plainSprint,
+			label:   plainSprint,
 			ok:      plainSprint,
 		}
 	}
 
 	finding := color.New(color.FgYellow, color.Bold)
 	finding.EnableColor()
+	label := color.New(color.FgCyan, color.Bold)
+	label.EnableColor()
 	ok := color.New(color.FgGreen, color.Bold)
 	ok.EnableColor()
 
 	return palette{
 		finding: finding.SprintFunc(),
+		label:   label.SprintFunc(),
 		ok:      ok.SprintFunc(),
 	}
 }
