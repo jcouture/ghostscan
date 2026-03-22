@@ -40,6 +40,7 @@ type Options struct {
 	Stdout      io.Writer
 	Color       bool
 	Verbose     bool
+	Silent      bool
 	MaxFileSize int64
 	Version     string
 }
@@ -98,6 +99,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		Version: opts.Version,
 		Color:   opts.Color,
 		Verbose: opts.Verbose,
+		Silent:  opts.Silent,
 		Runtime: report.RuntimeStats{
 			WalkDuration:          walkDuration,
 			ScanDuration:          scanDuration,

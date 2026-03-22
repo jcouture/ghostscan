@@ -51,6 +51,7 @@ func TestWriteHumanCleanDefaultOutput(t *testing.T) {
 
 	output := buf.String()
 	for _, needle := range []string{
+		"########",
 		"ghostscan dev\n\n",
 		"INF scanned 12 files (1.5 KB) in 842ms",
 		"INF skipped 7 files (binary: 2, excluded: 4, oversize: 1)",
@@ -121,6 +122,7 @@ func TestWriteHumanDefaultOutputSummarizesFindingsOnly(t *testing.T) {
 
 	output := buf.String()
 	for _, needle := range []string{
+		"########",
 		"ghostscan dev",
 		"INF scanned 3 files (4.1 KB) in 120ms",
 		"INF skipped 1 files (binary: 1)",
@@ -188,6 +190,7 @@ func TestWriteHumanVerboseOutputIncludesStructuredFields(t *testing.T) {
 
 	output := buf.String()
 	for _, needle := range []string{
+		"########",
 		"Finding:     Trojan Source bidi control character",
 		"Evidence:    <U+202E RIGHT-TO-LEFT OVERRIDE>",
 		"RuleID:      unicode/bidi",
@@ -302,6 +305,34 @@ func TestWriteHumanWriteError(t *testing.T) {
 	}
 	if !errors.Is(err, errBoom) {
 		t.Fatalf("WriteHuman() error = %v, want wrapped %v", err, errBoom)
+	}
+}
+
+func TestWriteHumanSilentSuppressesBanner(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	err := WriteHuman(&buf, nil, Options{
+		Version: "dev",
+		Silent:  true,
+		Color:   false,
+		Runtime: RuntimeStats{
+			FilesScanned: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("WriteHuman() error = %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "ghostscan dev") {
+		t.Fatalf("silent output = %q, want no version banner", output)
+	}
+	if strings.Contains(output, "########") {
+		t.Fatalf("silent output = %q, want no ascii banner", output)
+	}
+	if !strings.Contains(output, "INF scanned 1 files") {
+		t.Fatalf("silent output = %q, want runtime output", output)
 	}
 }
 

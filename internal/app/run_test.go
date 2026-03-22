@@ -130,6 +130,9 @@ func TestRunRendersIncidentReport(t *testing.T) {
 	}
 
 	output := stdout.String()
+	if !strings.Contains(output, "########") {
+		t.Fatalf("stdout = %q, want startup banner", output)
+	}
 	if !strings.Contains(output, "ghostscan dev") {
 		t.Fatalf("stdout = %q, want version header", output)
 	}
@@ -166,5 +169,30 @@ func TestRunResultHasFindingsFalseForCleanInput(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "no suspicious unicode patterns found") {
 		t.Fatalf("stdout = %q, want clean report", stdout.String())
+	}
+}
+
+func TestRunSilentSuppressesBanner(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	_, err := Run(context.Background(), Options{
+		Path:   filepath.Join("..", "..", "testdata", "clean"),
+		Stdout: &stdout,
+		Silent: true,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	if strings.Contains(output, "ghostscan dev") {
+		t.Fatalf("stdout = %q, want no version banner", output)
+	}
+	if strings.Contains(output, "########") {
+		t.Fatalf("stdout = %q, want no ascii banner", output)
+	}
+	if !strings.Contains(output, "no suspicious unicode patterns found") {
+		t.Fatalf("stdout = %q, want clean report", output)
 	}
 }

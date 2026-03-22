@@ -86,6 +86,11 @@ func TestExecute(t *testing.T) {
 			wantCode: exitcode.Success,
 		},
 		{
+			name:     "silent suppresses startup banner",
+			args:     []string{"--silent", "-nc", tempDir},
+			wantCode: exitcode.Success,
+		},
+		{
 			name:     "invalid max file size",
 			args:     []string{"--max-file-size", "-1"},
 			wantCode: exitcode.ExecutionError,
@@ -115,6 +120,14 @@ func TestExecute(t *testing.T) {
 
 			if tt.name == "print version" && !strings.Contains(stdout.String(), "ghostscan ") {
 				t.Fatalf("stdout = %q, want version output", stdout.String())
+			}
+			if tt.name == "silent suppresses startup banner" {
+				if strings.Contains(stdout.String(), "ghostscan dev") {
+					t.Fatalf("stdout = %q, want no version banner", stdout.String())
+				}
+				if strings.Contains(stdout.String(), "########") {
+					t.Fatalf("stdout = %q, want no ascii banner", stdout.String())
+				}
 			}
 
 			if tt.wantErr == "" {

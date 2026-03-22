@@ -41,8 +41,24 @@ type Options struct {
 	Version string
 	Color   bool
 	Verbose bool
+	Silent  bool
 	Runtime RuntimeStats
 }
+
+const startupBanner = `
+             ########
+         ###        ###
+       ##             ##
+       ##   ##   ##    ##
+       #    ##   ##    ##
+       #               ##
+      ##     #####     ##
+     ##                 ###
+    ##                    ##
+    ## ###             #####
+         ##           ##
+           ###         #
+              ###########`
 
 type RuntimeStats struct {
 	WalkDuration          time.Duration
@@ -116,7 +132,7 @@ func WriteHuman(w io.Writer, findings []finding.Finding, opts Options) error {
 func (r *HumanReporter) Write(findings []finding.Finding, opts Options) error {
 	model := buildReport(findings, opts)
 
-	if err := r.writeVersion(model.version); err != nil {
+	if err := r.writeHeader(model.version, opts.Silent); err != nil {
 		return fmt.Errorf("write report header: %w", err)
 	}
 
@@ -551,7 +567,16 @@ func newConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
 	return console
 }
 
-func (r *HumanReporter) writeVersion(version string) error {
+func (r *HumanReporter) writeHeader(version string, silent bool) error {
+	if silent {
+		return nil
+	}
+	if err := r.writer.linef(startupBanner); err != nil {
+		return err
+	}
+	if err := r.writer.blankLine(); err != nil {
+		return err
+	}
 	if err := r.writer.linef(version); err != nil {
 		return err
 	}

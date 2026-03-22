@@ -52,6 +52,12 @@ Turn off colored output:
 ghostscan --no-color .
 ```
 
+Suppress the startup banner and print only scan output:
+
+```bash
+ghostscan --silent .
+```
+
 Print structured finding blocks with evidence, context, and fingerprints:
 
 ```bash
@@ -61,6 +67,20 @@ ghostscan --verbose .
 Default output is summary-only. When the scan is clean, it looks like this:
 
 ```text
+         ########
+     ###        ###
+   ##             ##
+   ##   ##   ##    ##
+   #    ##   ##    ##
+   #               ##
+  ##     #####     ##
+ ##                 ###
+##                    ##
+## ###             #####
+     ##           ##
+       ###         #
+          ###########
+
 ghostscan v0.1.0-5-gc456376-dirty
 
 2:11PM INF scanned 1 files (98 B) in 97µs
@@ -71,6 +91,20 @@ ghostscan v0.1.0-5-gc456376-dirty
 When findings exist and `--verbose` is not set, the default output stays compact:
 
 ```text
+         ########
+     ###        ###
+   ##             ##
+   ##   ##   ##    ##
+   #    ##   ##    ##
+   #               ##
+  ##     #####     ##
+ ##                 ###
+##                    ##
+## ###             #####
+     ##           ##
+       ###         #
+          ###########
+
 ghostscan v0.1.0-5-gc456376-dirty
 
 2:11PM INF scanned 1 files (98 B) in 97µs
@@ -81,6 +115,20 @@ ghostscan v0.1.0-5-gc456376-dirty
 Use `--verbose` to print per-finding blocks:
 
 ```text
+         ########
+     ###        ###
+   ##             ##
+   ##   ##   ##    ##
+   #    ##   ##    ##
+   #               ##
+  ##     #####     ##
+ ##                 ###
+##                    ##
+## ###             #####
+     ##           ##
+       ###         #
+          ###########
+
 ghostscan v0.1.0-5-gc456376-dirty
 
 Finding:     Decoder pattern "eval("

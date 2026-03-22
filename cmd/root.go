@@ -48,12 +48,14 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var shortVersion bool
 	var longVersion bool
 	var verbose bool
+	var silent bool
 	var maxFileSize int64
 	flags.BoolVar(&shortNoColor, "nc", false, "disable color")
 	flags.BoolVar(&longNoColor, "no-color", false, "disable color")
 	flags.BoolVar(&shortVersion, "v", false, "print version")
 	flags.BoolVar(&longVersion, "version", false, "print version")
 	flags.BoolVar(&verbose, "verbose", false, "print detailed structured finding blocks")
+	flags.BoolVar(&silent, "silent", false, "suppress the startup banner")
 	flags.Int64Var(&maxFileSize, "max-file-size", 0, "skip files larger than this many bytes")
 
 	if err := flags.Parse(args); err != nil {
@@ -85,6 +87,7 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		Stdout:      stdout,
 		Color:       !(shortNoColor || longNoColor),
 		Verbose:     verbose,
+		Silent:      silent,
 		MaxFileSize: maxFileSize,
 		Version:     Version,
 	})
