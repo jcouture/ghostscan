@@ -44,17 +44,17 @@ func TestExecute(t *testing.T) {
 	}{
 		{
 			name:     "valid directory path",
-			args:     []string{"-nc", tempDir},
+			args:     []string{"-n", tempDir},
 			wantCode: exitcode.Success,
 		},
 		{
 			name:     "findings detected",
-			args:     []string{"-nc", filepath.Join("..", "testdata", "invisible")},
+			args:     []string{"-n", filepath.Join("..", "testdata", "invisible")},
 			wantCode: exitcode.FindingsDetected,
 		},
 		{
 			name:     "private use findings detected",
-			args:     []string{"-no-color", filepath.Join("..", "testdata", "privateuse")},
+			args:     []string{"--no-color", filepath.Join("..", "testdata", "privateuse")},
 			wantCode: exitcode.FindingsDetected,
 		},
 		{
@@ -82,12 +82,12 @@ func TestExecute(t *testing.T) {
 		},
 		{
 			name:     "print version",
-			args:     []string{"--version"},
+			args:     []string{"-v"},
 			wantCode: exitcode.Success,
 		},
 		{
 			name:     "silent suppresses startup banner",
-			args:     []string{"--silent", "-nc", tempDir},
+			args:     []string{"--silent", "-n", tempDir},
 			wantCode: exitcode.Success,
 		},
 		{
@@ -141,5 +141,33 @@ func TestExecute(t *testing.T) {
 				t.Fatalf("stderr = %q, want substring %q", stderr.String(), tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestExecuteHelp(t *testing.T) {
+	t.Parallel()
+
+	var stdout strings.Builder
+	var stderr strings.Builder
+
+	code := execute(context.Background(), []string{"--help"}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("execute() code = %d, want %d", code, exitcode.Success)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty output", stdout.String())
+	}
+
+	help := stderr.String()
+	for _, want := range []string{
+		"Usage:\n  ghostscan [flags] [path]",
+		"Optional file or directory to scan. Flags must come before the path.",
+		"--verbose",
+		"--silent",
+		"--max-file-size",
+	} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("help = %q, want substring %q", help, want)
+		}
 	}
 }

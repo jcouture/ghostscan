@@ -22,10 +22,12 @@ package cmd
 
 import (
 	"context"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/spf13/pflag"
 
 	"github.com/jcouture/ghostscan/internal/app"
 	"github.com/jcouture/ghostscan/internal/exitcode"
@@ -40,29 +42,39 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		args = os.Args[1:]
 	}
 
-	flags := flag.NewFlagSet("ghostscan", flag.ContinueOnError)
+	flags := pflag.NewFlagSet("ghostscan", pflag.ContinueOnError)
 	flags.SetOutput(stderr)
+	flags.SetInterspersed(false)
+	flags.Usage = func() {
+		_, _ = fmt.Fprintln(stderr, "Usage:")
+		_, _ = fmt.Fprintln(stderr, "  ghostscan [flags] [path]")
+		_, _ = fmt.Fprintln(stderr)
+		_, _ = fmt.Fprintln(stderr, "Arguments:")
+		_, _ = fmt.Fprintln(stderr, "  [path]   Optional file or directory to scan. Flags must come before the path.")
+		_, _ = fmt.Fprintln(stderr)
+		_, _ = fmt.Fprintln(stderr, "Flags:")
+		flags.PrintDefaults()
+	}
 
-	var shortNoColor bool
-	var longNoColor bool
-	var shortVersion bool
-	var longVersion bool
+	var noColor bool
+	var version bool
 	var verbose bool
 	var silent bool
 	var maxFileSize int64
-	flags.BoolVar(&shortNoColor, "nc", false, "disable color")
-	flags.BoolVar(&longNoColor, "no-color", false, "disable color")
-	flags.BoolVar(&shortVersion, "v", false, "print version")
-	flags.BoolVar(&longVersion, "version", false, "print version")
+	flags.BoolVarP(&noColor, "no-color", "n", false, "disable color")
+	flags.BoolVarP(&version, "version", "v", false, "print version")
 	flags.BoolVar(&verbose, "verbose", false, "print detailed structured finding blocks")
 	flags.BoolVar(&silent, "silent", false, "suppress the startup banner")
 	flags.Int64Var(&maxFileSize, "max-file-size", 0, "skip files larger than this many bytes")
 
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, pflag.ErrHelp) {
+			return exitcode.Success
+		}
 		return exitcode.ExecutionError
 	}
 
-	if shortVersion || longVersion {
+	if version {
 		_, _ = fmt.Fprintln(stdout, versionString())
 		return exitcode.Success
 	}
@@ -85,7 +97,7 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	result, err := app.Run(ctx, app.Options{
 		Path:        path,
 		Stdout:      stdout,
-		Color:       !(shortNoColor || longNoColor),
+		Color:       !noColor,
 		Verbose:     verbose,
 		Silent:      silent,
 		MaxFileSize: maxFileSize,
