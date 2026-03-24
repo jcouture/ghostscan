@@ -4,7 +4,7 @@ All notable changes to ghostscan are documented here.
 
 ---
 
-## v0.2.0
+## v0.2.0 - 2026-03-24
 
 ### New Features
 
@@ -33,6 +33,6 @@ All notable changes to ghostscan are documented here.
 - Added installation options section covering direct download and building from source.
 - Added FAQ section with macOS Gatekeeper quarantine resolution, static-only scanning clarification, and single-file scanning.
 
-## v0.1.0
+## v0.1.0 - 2026-03-17
 
 Initial version.
