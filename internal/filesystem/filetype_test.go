@@ -110,8 +110,11 @@ func TestCheckFile(t *testing.T) {
 				t.Fatalf("CheckFile() error = %v", err)
 			}
 
-			if got != tt.want {
+			if got.Eligible != tt.want.Eligible || got.Reason != tt.want.Reason {
 				t.Fatalf("CheckFile() = %+v, want %+v", got, tt.want)
+			}
+			if got.Size < 0 {
+				t.Fatalf("CheckFile().Size = %d, want non-negative", got.Size)
 			}
 		})
 	}

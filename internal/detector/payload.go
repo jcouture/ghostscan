@@ -47,6 +47,10 @@ func NewPayload() Payload {
 }
 
 func (Payload) Detect(file File) []finding.Finding {
+	if file.Prepass.Ready && !file.Prepass.HasInvisible && !file.Prepass.HasPrivateUse && !file.Prepass.HasBidi && !file.Prepass.HasDirectional {
+		return nil
+	}
+
 	findings := make([]finding.Finding, 0)
 
 	runStart := -1
@@ -62,16 +66,18 @@ func (Payload) Detect(file File) []finding.Finding {
 			return
 		}
 
-		start := file.Observations[runStart]
 		run := file.Observations[runStart:runEnd]
+		start := run[0]
+		end := run[len(run)-1]
 		findings = append(findings, finding.Finding{
-			Path:     file.Path,
-			Line:     start.Line,
-			Column:   start.Column,
-			RuleID:   PayloadRuleID,
-			Severity: finding.SeverityHigh,
-			Message:  payloadMessage(runClass, len(run)),
-			Evidence: renderObservationRun(run),
+			Path:      file.Path,
+			Line:      start.Line,
+			Column:    start.Column,
+			EndLine:   end.Line,
+			EndColumn: end.Column,
+			RuleID:    PayloadRuleID,
+			Message:   payloadMessage(runClass, len(run)),
+			Evidence:  renderObservationRun(run),
 		})
 
 		runStart = -1
@@ -199,14 +205,16 @@ func detectPayloadDensity(file File) []finding.Finding {
 	for _, window := range windows {
 		observations := file.Observations[window.start:window.end]
 		start := observations[0]
+		end := observations[len(observations)-1]
 		findings = append(findings, finding.Finding{
-			Path:     file.Path,
-			Line:     start.Line,
-			Column:   start.Column,
-			RuleID:   PayloadRuleID,
-			Severity: finding.SeverityHigh,
-			Message:  fmt.Sprintf("Suspicious encoded payload density detected: %d suspicious Unicode characters in a %d-character window (%s)", window.suspiciousCount, payloadDensityWindow, joinPayloadClasses(window.classes)),
-			Evidence: renderPayloadDensityWindow(observations),
+			Path:      file.Path,
+			Line:      start.Line,
+			Column:    start.Column,
+			EndLine:   end.Line,
+			EndColumn: end.Column,
+			RuleID:    PayloadRuleID,
+			Message:   fmt.Sprintf("Suspicious encoded payload density detected: %d suspicious Unicode characters in a %d-character window (%s)", window.suspiciousCount, payloadDensityWindow, joinPayloadClasses(window.classes)),
+			Evidence:  renderPayloadDensityWindow(observations),
 		})
 	}
 

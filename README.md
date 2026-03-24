@@ -1,106 +1,151 @@
 # ghostscan
 
-Scan code for hidden Unicode tricks that can make malicious content hard to see.
+> Static Unicode security scanner for developers and CI teams reviewing untrusted source code.
 
-## What it does
+## Overview
 
-`ghostscan` checks a file or folder for suspicious Unicode characters and look-alike text patterns that can hide code, confuse reviewers, or disguise risky behavior. It reports exactly where the issue appears and shows hidden characters in a visible form so you can inspect them quickly.
-
-It is designed for local checks before review, quick spot-checks of downloaded code, and automated repository scanning in CI.
-
-## Getting Started
-
-**Option 1: Download a binary release**
-
-Download a pre-built binary for your platform from the [releases page](https://github.com/jcouture/ghostscan/releases), extract it, and place the binary somewhere on your `PATH`.
-
-**Option 2: Install with Go**
-
-1. Install Go on your machine.
-2. Install `ghostscan`:
+It is built for security engineers, maintainers, Go developers, and DevOps teams who need a fast, local, deterministic check before code lands in CI, a release, or a dependency tree. Instead of trying to be a general SAST platform, it focuses narrowly on Unicode-based deception: hidden characters, misleading script mixing, payload-like sequences, and nearby decode-or-execute patterns. The differentiator is simple: it makes invisible evidence readable and keeps the output precise enough for code review and CI decisions.
 
 ```bash
-go install github.com/jcouture/ghostscan@latest
+~> ghostscan --verbose ./testdata/invisible/single.txt
+
+             ########
+         ###        ###
+       ##             ##
+       ##   ##   ##    ##
+       #    ##   ##    ##
+       #               ##
+      ##     #####     ##
+     ##                 ###
+    ##                    ##
+    ## ###             #####
+         ##           ##
+           ###         #
+              ###########
+
+ghostscan v0.2.0
+
+Finding:     Invisible unicode character
+Evidence:    <U+200B ZERO WIDTH SPACE>
+RuleID:      unicode/invisible
+File:        /Users/johnsmith/ghostscan/testdata/invisible/single.txt
+Line:        1
+Column:      2
+Count:       1 suspicious runes
+Category:    invisible unicode
+Context:
+  A<U+200B ZERO WIDTH SPACE>B
+Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/invisible:1:2
+
+8:57PM INF scanned 1 files (6 B) in 123µs
+8:57PM INF skipped 0 files (none)
 ```
-
-If your shell cannot find `ghostscan`, make sure your Go `bin` directory is on your `PATH`.
-
-**Then scan the current folder:**
-
-```bash
-ghostscan .
-```
-
-## How to Use
-
-Scan the current project:
-
-```bash
-ghostscan .
-```
-
-Scan a specific repository or file:
-
-```bash
-ghostscan /path/to/project
-ghostscan /path/to/file.js
-```
-
-Turn off colored output:
-
-```bash
-ghostscan --no-color .
-```
-
-Use it in CI or scripts:
-
-```bash
-ghostscan .
-echo $?
-```
-
-Exit codes:
-
-- `0` = no findings
-- `1` = suspicious content found
-- `2` = scan failed
-
-Typical uses:
-
-- Check a pull request checkout before review
-- Inspect third-party code before running it
-- Add a Unicode safety check to CI pipelines
 
 ## Features
 
-- Finds invisible Unicode characters such as zero-width characters
-- Flags private-use Unicode characters that can hide custom payloads
-- Detects Trojan Source bidirectional control characters
-- Spots suspicious hidden Unicode payload runs
-- Warns about decoder or dynamic execution patterns near hidden payloads
-- Detects mixed-script identifiers that look legitimate at a glance
-- Detects combining marks inside token-like text
-- Produces a readable terminal report with file locations, severity, and evidence
-- Skips common generated or dependency folders such as `.git`, `node_modules`, and `vendor`
-- Skips binary files and files larger than 5 MB
+- **Visible evidence for invisible content**: Renders hidden Unicode as strings like `<U+200B ZERO WIDTH SPACE>`.
+- **Focused Unicode threat coverage**: Detects invisible characters, private-use Unicode, bidi controls, directional marks, mixed-script tokens, and combining marks.
+- **Payload-aware heuristics**: Flags long hidden sequences, dense suspicious regions, decoder markers, and payload-plus-decoder correlations.
+- **Safe repository traversal**: Skips symlinks, NUL-containing files, oversize files, and common dependency or build directories.
+- **CI-friendly behavior**: Uses deterministic ordering, plain-text output, and exit codes `0`, `1`, and `2`.
 
-## FAQ / Troubleshooting
+## Installation
 
-**Why did `ghostscan` return exit code `1`?**
+```bash
+# Pre-built release binary
+# Download the archive for your platform from:
+# https://github.com/jcouture/ghostscan/releases
+# Then extract it and place `ghostscan` on your PATH
 
-That means the scan completed and found suspicious content. Review the reported files and locations in the terminal output.
+# From source
+git clone https://github.com/jcouture/ghostscan.git
+cd ghostscan
+go mod download
+go run . --version
 
-**Why did `ghostscan` return exit code `2`?**
+# Build a local binary
+make build
+./bin/ghostscan --help
 
-The scan could not complete. Common causes are an invalid path or a file access problem.
+# Go install
+go install github.com/jcouture/ghostscan@latest
+ghostscan --version
+```
 
-**Why are some files not being scanned?**
+> **Requirements:** Go `1.26.1` is pinned in `go.mod` and `mise.toml` for source builds. Pre-built release archives are produced for Linux, macOS, and Windows.
 
-`ghostscan` skips symlinks, binary files, very large files, and common build or dependency folders to keep scans safe and focused.
+You should see `ghostscan dev (commit none)` from a plain source build, or a real tag and commit in a release build.
 
-**I downloaded `ghostscan` on macOS and it is blocked by quarantine. What should I do?**
+## Usage
 
-If you downloaded the `ghostscan` binary directly on macOS and Gatekeeper blocks it, remove the quarantine attribute from the binary:
+```text
+ghostscan [flags] [path]
+
+Flags:
+      --max-file-size int   skip files larger than this many bytes
+  -n, --no-color            disable color
+      --silent              suppress the startup banner
+      --verbose             print detailed structured finding blocks
+  -v, --version             print version
+```
+
+### Common Examples
+
+```bash
+# Scan the current repository
+ghostscan .
+
+# Scan a specific directory
+ghostscan ./testdata/mixed
+
+# Scan a single file
+ghostscan ./testdata/invisible/single.txt
+
+# CI-friendly output
+ghostscan --silent --no-color .
+
+# Show detailed findings
+ghostscan --silent --no-color --verbose ./testdata/mixed/correlated_decoder_near_payload.js
+
+# Enforce a smaller max file size
+ghostscan --max-file-size 1048576 .
+```
+
+## Output and Exit Codes
+
+`ghostscan` prints a human-readable terminal report. In verbose mode, each finding includes:
+
+- file path
+- line and column
+- evidence with invisible Unicode rendered visibly
+- local context
+- rule ID
+- fingerprint
+
+Exit codes:
+
+| Exit code | Description                                                  |
+|-----------|--------------------------------------------------------------|
+| 0         | scan completed and found no suspicious patterns              |
+| 1         | scan completed and found suspicious patterns                 |
+| 2         | execution failed because of invalid input or another runtime |
+
+## Scan Behavior
+
+The current scanner behavior is intentionally narrow and real:
+
+- Recursively scans a file or directory path.
+- Does not follow symlinks.
+- Treats files containing a NUL byte as binary and skips them.
+- Uses a default max file size of `5 MiB`.
+- Skips `.git`, `node_modules`, `vendor`, `dist`, `build`, `target`, `out`, and `coverage`.
+- Never executes scanned code or fetches network resources.
+
+## FAQ
+
+**I downloaded `ghostscan` on macOS and it is blocked by Gatekeeper. What should I do?**
+
+Remove the quarantine attribute from the binary:
 
 ```bash
 xattr -d com.apple.quarantine ghostscan
@@ -114,33 +159,6 @@ No. It only performs static checks on file contents.
 
 Yes. Pass the file path directly to `ghostscan`.
 
-## Release Process
+## License
 
-The repository includes a tag-driven release flow:
-
-1. Make sure the worktree is clean and tests pass.
-2. Create the next semver tag:
-
-```bash
-make tag
-```
-
-You can override the version explicitly if needed:
-
-```bash
-make tag VERSION=v0.1.0
-```
-
-3. Push the new tag:
-
-```bash
-git push origin v0.1.0
-```
-
-Pushing a `v*.*.*` tag triggers GitHub Actions, which runs GoReleaser and publishes release archives plus checksums to GitHub Releases.
-
-To verify the release config locally without publishing:
-
-```bash
-make release-snapshot
-```
+See [LICENSE](LICENSE) for details.

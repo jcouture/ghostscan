@@ -20,11 +20,7 @@
 
 package detector
 
-import (
-	"testing"
-
-	"github.com/jcouture/ghostscan/internal/finding"
-)
+import "testing"
 
 func TestControlDetect(t *testing.T) {
 	t.Parallel()
@@ -68,9 +64,6 @@ func TestControlDetect(t *testing.T) {
 		}
 		if got.RuleID != ControlRuleID {
 			t.Fatalf("findings[%d].RuleID = %q, want %q", tt.index, got.RuleID, ControlRuleID)
-		}
-		if got.Severity != finding.SeverityHigh {
-			t.Fatalf("findings[%d].Severity = %q, want %q", tt.index, got.Severity, finding.SeverityHigh)
 		}
 		if got.Evidence != tt.wantEvidence {
 			t.Fatalf("findings[%d].Evidence = %q, want %q", tt.index, got.Evidence, tt.wantEvidence)

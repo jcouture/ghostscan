@@ -35,12 +35,3 @@ func isExcludedDirectory(name string) bool {
 	_, excluded := excludedDirectories[name]
 	return excluded
 }
-
-func isEligibleFile(path string, maxSize int64) (bool, error) {
-	eligibility, err := CheckFile(path, maxSize)
-	if err != nil {
-		return false, err
-	}
-
-	return eligibility.Eligible, nil
-}

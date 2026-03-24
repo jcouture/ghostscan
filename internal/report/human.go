@@ -21,102 +21,107 @@
 package report
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/internal/unicodeutil"
+	"github.com/rs/zerolog"
 )
 
-// Keep the window tight enough to feel local in a code review while still catching nearby setup code.
-const correlationDistanceLines = 25
+const correlationDistanceLines = 20
 
 type Options struct {
-	FilesScanned int
-	Color        bool
+	Version string
+	Color   bool
+	Verbose bool
+	Silent  bool
+	Runtime RuntimeStats
+}
+
+const startupBanner = `
+             ########
+         ###        ###
+       ##             ##
+       ##   ##   ##    ##
+       #    ##   ##    ##
+       #               ##
+      ##     #####     ##
+     ##                 ###
+    ##                    ##
+    ## ###             #####
+         ##           ##
+           ###         #
+              ###########`
+
+type RuntimeStats struct {
+	WalkDuration          time.Duration
+	ScanDuration          time.Duration
+	FilesDiscovered       int
+	FilesScanned          int
+	BytesScanned          int64
+	RecoverableFileErrors int
+	SkippedByReason       []Count
+	FindingsByRule        []Count
+}
+
+type Count struct {
+	Label string
+	Value int
 }
 
 type HumanReporter struct {
 	writer  reportWriter
 	palette palette
+	color   bool
 }
 
 type reportModel struct {
-	files   []fileReport
-	summary summary
+	version  string
+	runtime  RuntimeStats
+	files    []fileReport
+	findings []renderedFinding
+	summary  summary
+	verbose  bool
 }
 
 type summary struct {
-	result            string
-	filesScanned      int
-	filesWithFindings int
-	severityCounts    []severityCount
-	topConcerns       []topConcern
-}
-
-type severityCount struct {
-	severity finding.Severity
-	count    int
-}
-
-type topConcern struct {
-	label string
-	files int
+	totalFindings int
+	skippedTotal  int
 }
 
 type fileReport struct {
-	path                 string
-	severity             finding.Severity
-	incidents            []incident
-	supportingObservaton int
+	path     string
+	findings []renderedFinding
 }
 
-type incident struct {
-	kind       incidentKind
-	ruleID     string
-	title      string
-	severity   finding.Severity
-	startLine  int
-	startCol   int
-	endLine    int
-	endCol     int
-	why        []string
-	evidence   []string
-	locations  []string
-	supporting []supportObservation
-	sortRank   int
+type renderedFinding struct {
+	Path        string
+	RuleID      string
+	Title       string
+	Line        int
+	Column      int
+	Evidence    string
+	Context     string
+	Character   string
+	Count       int
+	Category    string
+	Explanation string
+	Correlation string
+	Fingerprint string
 }
-
-type supportObservation struct {
-	severity finding.Severity
-	title    string
-	details  []string
-	line     int
-	column   int
-	sortRank int
-}
-
-type incidentKind string
-
-const (
-	incidentCorrelation incidentKind = "correlation"
-	incidentBidi        incidentKind = "bidi"
-	incidentControl     incidentKind = "directional-control"
-	incidentPayload     incidentKind = "payload"
-	incidentInvisible   incidentKind = "invisible"
-	incidentPrivateUse  incidentKind = "private-use"
-	incidentDecoder     incidentKind = "decoder"
-	incidentMixedScript incidentKind = "mixed-script"
-	incidentCombining   incidentKind = "combining-mark"
-	incidentOther       incidentKind = "other"
-)
 
 func NewHumanReporter(w io.Writer, opts Options) *HumanReporter {
 	return &HumanReporter{
 		writer:  newReportWriter(w),
 		palette: newPalette(opts.Color),
+		color:   opts.Color,
 	}
 }
 
@@ -127,956 +132,691 @@ func WriteHuman(w io.Writer, findings []finding.Finding, opts Options) error {
 func (r *HumanReporter) Write(findings []finding.Finding, opts Options) error {
 	model := buildReport(findings, opts)
 
-	if err := r.writeHeader(model.summary); err != nil {
+	if err := r.writeHeader(model.version, opts.Silent); err != nil {
 		return fmt.Errorf("write report header: %w", err)
 	}
 
-	for _, file := range model.files {
+	if model.summary.totalFindings > 0 && model.verbose {
+		for index, item := range model.findings {
+			if index > 0 {
+				if err := r.writer.blankLine(); err != nil {
+					return fmt.Errorf("write finding separator: %w", err)
+				}
+			}
+			if err := r.writeVerboseFinding(item); err != nil {
+				return fmt.Errorf("write finding block: %w", err)
+			}
+		}
 		if err := r.writer.blankLine(); err != nil {
-			return fmt.Errorf("write file separator: %w", err)
+			return fmt.Errorf("write runtime separator: %w", err)
 		}
-		if err := r.writeFile(file); err != nil {
-			return fmt.Errorf("write file section: %w", err)
-		}
+	}
+
+	if err := r.writeRuntimeSummary(model); err != nil {
+		return fmt.Errorf("write runtime summary: %w", err)
 	}
 
 	return nil
 }
 
 func buildReport(findings []finding.Finding, opts Options) reportModel {
-	files := groupByFile(findings)
-	incidents := buildFileReports(files)
+	rendered := buildRenderedFindings(findings)
+	files := groupRenderedFindings(rendered)
 	return reportModel{
-		files:   incidents,
-		summary: summarize(incidents, opts.FilesScanned),
+		version:  versionLabel(opts.Version),
+		runtime:  opts.Runtime,
+		files:    files,
+		findings: rendered,
+		summary:  buildSummary(rendered, opts.Runtime),
+		verbose:  opts.Verbose,
 	}
 }
 
-func groupByFile(findings []finding.Finding) map[string][]finding.Finding {
+func versionLabel(version string) string {
+	if strings.TrimSpace(version) == "" {
+		return "ghostscan dev"
+	}
+	return "ghostscan " + version
+}
+
+func buildSummary(findings []renderedFinding, runtime RuntimeStats) summary {
+	skippedTotal := 0
+	for _, item := range runtime.SkippedByReason {
+		skippedTotal += item.Value
+	}
+
+	return summary{
+		totalFindings: len(findings),
+		skippedTotal:  skippedTotal,
+	}
+}
+
+func buildRenderedFindings(findings []finding.Finding) []renderedFinding {
 	grouped := make(map[string][]finding.Finding)
 	for _, item := range findings {
 		grouped[item.Path] = append(grouped[item.Path], item)
 	}
-	return grouped
-}
 
-func buildFileReports(grouped map[string][]finding.Finding) []fileReport {
 	paths := make([]string, 0, len(grouped))
 	for path := range grouped {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
 
-	files := make([]fileReport, 0, len(paths))
+	rendered := make([]renderedFinding, 0, len(findings))
 	for _, path := range paths {
-		files = append(files, buildFileReport(path, grouped[path]))
+		rendered = append(rendered, buildFileRenderedFindings(grouped[path])...)
 	}
-	return files
+	return rendered
 }
 
-func buildFileReport(path string, findings []finding.Finding) fileReport {
-	var (
-		bidiFindings      []finding.Finding
-		controlFindings   []finding.Finding
-		invisibleFindings []finding.Finding
-		privateFindings   []finding.Finding
-		payloadFindings   []finding.Finding
-		decoderFindings   []finding.Finding
-		otherFindings     []finding.Finding
-	)
+func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
+	correlations := findingsByRule(findings, "unicode/correlation")
+	payloads := findingsByRule(findings, "unicode/payload")
+	decoders := findingsByRule(findings, "unicode/decoder")
+	invisibles := findingsByRule(findings, "unicode/invisible")
+	privateUse := findingsByRule(findings, "unicode/private-use")
+
+	usedPayloads := make([]bool, len(payloads))
+	usedDecoders := make([]bool, len(decoders))
+	suppressedInvisible := make([]bool, len(invisibles))
+	suppressedPrivateUse := make([]bool, len(privateUse))
+
+	for _, payload := range payloads {
+		for index, item := range invisibles {
+			if overlaps(item, payload) {
+				suppressedInvisible[index] = true
+			}
+		}
+		for index, item := range privateUse {
+			if overlaps(item, payload) {
+				suppressedPrivateUse[index] = true
+			}
+		}
+	}
+
+	rendered := make([]renderedFinding, 0, len(findings))
+	for _, correlation := range correlations {
+		payloadIndex := matchingPayloadIndex(correlation, payloads)
+		if payloadIndex >= 0 {
+			usedPayloads[payloadIndex] = true
+		}
+
+		decoderIndex := nearestDecoderIndex(correlation, decoders)
+		if decoderIndex >= 0 {
+			usedDecoders[decoderIndex] = true
+		}
+
+		rendered = append(rendered, newCorrelationFinding(correlation, decoders, decoderIndex))
+	}
+
+	for index, item := range payloads {
+		if usedPayloads[index] {
+			continue
+		}
+		rendered = append(rendered, newRenderedFinding(item))
+	}
+
+	for index, item := range invisibles {
+		if suppressedInvisible[index] {
+			continue
+		}
+		rendered = append(rendered, newRenderedFinding(item))
+	}
+
+	for index, item := range privateUse {
+		if suppressedPrivateUse[index] {
+			continue
+		}
+		rendered = append(rendered, newRenderedFinding(item))
+	}
 
 	for _, item := range findings {
 		switch item.RuleID {
-		case "unicode/bidi":
-			bidiFindings = append(bidiFindings, item)
-		case "unicode/directional-control":
-			controlFindings = append(controlFindings, item)
-		case "unicode/invisible":
-			invisibleFindings = append(invisibleFindings, item)
-		case "unicode/private-use":
-			privateFindings = append(privateFindings, item)
-		case "unicode/payload":
-			payloadFindings = append(payloadFindings, item)
+		case "unicode/correlation", "unicode/payload", "unicode/invisible", "unicode/private-use":
+			continue
 		case "unicode/decoder":
-			decoderFindings = append(decoderFindings, item)
-		default:
-			otherFindings = append(otherFindings, item)
+			index := indexOfFinding(decoders, item)
+			if index >= 0 && usedDecoders[index] {
+				continue
+			}
 		}
+		rendered = append(rendered, newRenderedFinding(item))
 	}
 
-	invisibleRuns := buildSequences(invisibleFindings, incidentInvisible)
-	privateRuns := buildSequences(privateFindings, incidentPrivateUse)
-	correlated, usedPayload, usedDecoder := buildCorrelationIncidents(payloadFindings, decoderFindings, invisibleRuns, privateRuns)
+	sortRenderedFindings(rendered)
+	return rendered
+}
 
-	incidents := make([]incident, 0, len(correlated)+len(payloadFindings)+len(invisibleRuns)+len(privateRuns)+len(otherFindings)+2)
-	incidents = append(incidents, correlated...)
+func findingsByRule(findings []finding.Finding, ruleID string) []finding.Finding {
+	filtered := make([]finding.Finding, 0)
+	for _, item := range findings {
+		if item.RuleID == ruleID {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
 
-	for index, item := range payloadFindings {
-		if usedPayload[index] {
+func matchingPayloadIndex(correlation finding.Finding, payloads []finding.Finding) int {
+	for index, payload := range payloads {
+		if payload.Path == correlation.Path && payload.Line == correlation.Line && payload.Column == correlation.Column {
+			return index
+		}
+	}
+	return -1
+}
+
+func nearestDecoderIndex(reference finding.Finding, decoders []finding.Finding) int {
+	bestIndex := -1
+	bestDistance := 0
+
+	for index, decoder := range decoders {
+		if decoder.Path != reference.Path {
 			continue
 		}
-		incidents = append(incidents, buildPayloadIncident(item, invisibleRuns, privateRuns))
-	}
-
-	for _, run := range invisibleRuns {
-		if !run.suppressed {
-			incidents = append(incidents, buildSequenceIncident(run))
-		}
-	}
-	for _, run := range privateRuns {
-		if !run.suppressed {
-			incidents = append(incidents, buildSequenceIncident(run))
-		}
-	}
-
-	if len(bidiFindings) > 0 {
-		incidents = append(incidents, buildLocationIncident(
-			incidentBidi,
-			"unicode/bidi",
-			"Trojan Source bidi control characters detected",
-			finding.SeverityHigh,
-			bidiFindings,
-			[]string{
-				"Bidirectional controls can reorder displayed source and hide the code a reviewer believes they are reading.",
-			},
-		))
-	}
-
-	if len(controlFindings) > 0 {
-		incidents = append(incidents, buildLocationIncident(
-			incidentControl,
-			"unicode/directional-control",
-			"Suspicious directional control characters detected",
-			finding.SeverityHigh,
-			controlFindings,
-			[]string{
-				"Directional control marks are invisible and can change how surrounding text is rendered.",
-			},
-		))
-	}
-
-	for index, item := range decoderFindings {
-		if usedDecoder[index] {
+		distance := lineDistance(reference.Line, decoder.Line)
+		if distance > correlationDistanceLines {
 			continue
 		}
-		incidents = append(incidents, buildSingleFindingIncident(item))
+		if bestIndex == -1 || distance < bestDistance || (distance == bestDistance && less(decoder, decoders[bestIndex])) {
+			bestIndex = index
+			bestDistance = distance
+		}
 	}
 
-	for _, item := range otherFindings {
-		incidents = append(incidents, buildSingleFindingIncident(item))
+	return bestIndex
+}
+
+func indexOfFinding(findings []finding.Finding, target finding.Finding) int {
+	for index, item := range findings {
+		if item == target {
+			return index
+		}
+	}
+	return -1
+}
+
+func overlaps(left, right finding.Finding) bool {
+	if left.Path != right.Path {
+		return false
+	}
+	if left.Line != right.Line || right.EndLine > left.Line && left.EndLine > right.Line {
+		// Mixed-line overlap is not emitted by current grouped payload runs.
 	}
 
-	// Stable incident ordering keeps CI output and golden-style report checks reproducible.
-	sort.SliceStable(incidents, func(i, j int) bool {
-		if incidents[i].startLine != incidents[j].startLine {
-			return incidents[i].startLine < incidents[j].startLine
+	leftEndLine, leftEndColumn := findingEnd(left)
+	rightEndLine, rightEndColumn := findingEnd(right)
+
+	if left.Line != right.Line || leftEndLine != rightEndLine {
+		return left.Line == right.Line && leftEndLine == rightEndLine &&
+			left.Column <= rightEndColumn && right.Column <= leftEndColumn
+	}
+
+	return left.Column <= rightEndColumn && right.Column <= leftEndColumn
+}
+
+func findingEnd(item finding.Finding) (int, int) {
+	endLine := item.EndLine
+	endColumn := item.EndColumn
+	if endLine == 0 {
+		endLine = item.Line
+	}
+	if endColumn == 0 {
+		endColumn = item.Column
+	}
+	return endLine, endColumn
+}
+
+func newCorrelationFinding(item finding.Finding, decoders []finding.Finding, decoderIndex int) renderedFinding {
+	payloadEvidence, decoderEvidence := splitCorrelationEvidence(item.Evidence)
+	distance := 0
+	if decoderIndex >= 0 {
+		distance = lineDistance(item.Line, decoders[decoderIndex].Line)
+		if decoderEvidence == "" {
+			decoderEvidence = unicodeutil.RenderText(decoders[decoderIndex].Evidence)
 		}
-		if incidents[i].startCol != incidents[j].startCol {
-			return incidents[i].startCol < incidents[j].startCol
+	}
+
+	correlationNote := item.Message
+	if decoderEvidence != "" && distance >= 0 {
+		correlationNote = fmt.Sprintf("hidden unicode sequence within %d line%s of %s", distance, plural(distance), decoderEvidence)
+	}
+
+	return renderedFinding{
+		Path:        item.Path,
+		RuleID:      item.RuleID,
+		Title:       "hidden unicode payload sequence + decoder pattern",
+		Line:        item.Line,
+		Column:      item.Column,
+		Evidence:    payloadEvidence,
+		Context:     unicodeutil.RenderText(item.Context),
+		Count:       suspiciousRuneCount(payloadEvidence),
+		Category:    "hidden unicode payload",
+		Correlation: correlationNote,
+		Fingerprint: fingerprint(item),
+	}
+}
+
+func splitCorrelationEvidence(evidence string) (string, string) {
+	parts := strings.Split(evidence, " | ")
+	payloadEvidence := ""
+	decoderEvidence := ""
+	for _, part := range parts {
+		switch {
+		case strings.HasPrefix(part, "payload: "):
+			payloadEvidence = strings.TrimPrefix(part, "payload: ")
+		case strings.HasPrefix(part, "marker: "):
+			decoderEvidence = unicodeutil.RenderText(strings.TrimPrefix(part, "marker: "))
 		}
-		if incidents[i].sortRank != incidents[j].sortRank {
-			return incidents[i].sortRank < incidents[j].sortRank
+	}
+	return payloadEvidence, decoderEvidence
+}
+
+func newRenderedFinding(item finding.Finding) renderedFinding {
+	rendered := renderedFinding{
+		Path:        item.Path,
+		RuleID:      item.RuleID,
+		Title:       titleForFinding(item),
+		Line:        item.Line,
+		Column:      item.Column,
+		Evidence:    unicodeutil.RenderText(item.Evidence),
+		Context:     unicodeutil.RenderText(item.Context),
+		Fingerprint: fingerprint(item),
+	}
+
+	switch item.RuleID {
+	case "unicode/invisible":
+		rendered.Count = suspiciousRuneCount(item.Evidence)
+		rendered.Category = "invisible unicode"
+	case "unicode/private-use":
+		rendered.Count = suspiciousRuneCount(item.Evidence)
+		rendered.Category = "private-use unicode"
+	case "unicode/payload":
+		rendered.Count = suspiciousRuneCount(item.Evidence)
+		rendered.Category = payloadCategory(item.Message)
+	case "unicode/bidi":
+		rendered.Character = unicodeutil.RenderText(item.Evidence)
+		rendered.Explanation = "visual order differs from logical execution order"
+	case "unicode/directional-control":
+		rendered.Character = unicodeutil.RenderText(item.Evidence)
+		rendered.Explanation = "directional controls are invisible and can change how nearby text is rendered"
+	case "unicode/decoder":
+		rendered.Category = "decoder pattern"
+	case "unicode/mixed-script":
+		rendered.Category = "mixed-script token"
+	case "unicode/combining-mark":
+		rendered.Category = "combining mark"
+	}
+
+	return rendered
+}
+
+func titleForFinding(item finding.Finding) string {
+	switch item.RuleID {
+	case "unicode/payload":
+		if strings.Contains(strings.ToLower(item.Message), "density") {
+			return "hidden unicode payload density"
 		}
-		if incidents[i].ruleID != incidents[j].ruleID {
-			return incidents[i].ruleID < incidents[j].ruleID
+		return "hidden unicode payload sequence"
+	case "unicode/decoder":
+		return fmt.Sprintf("decoder pattern %q", item.Evidence)
+	case "unicode/invisible":
+		count := suspiciousRuneCount(item.Evidence)
+		if count > 1 {
+			return fmt.Sprintf("contiguous zero-width unicode sequence (length: %d)", count)
 		}
-		return incidents[i].title < incidents[j].title
+		return "invisible unicode character"
+	case "unicode/private-use":
+		count := suspiciousRuneCount(item.Evidence)
+		if count > 1 {
+			return fmt.Sprintf("contiguous private-use unicode sequence (length: %d)", count)
+		}
+		return "private-use unicode character"
+	case "unicode/bidi":
+		return "Trojan Source bidi control character"
+	case "unicode/directional-control":
+		return "directional control character"
+	case "unicode/mixed-script":
+		return "mixed-script identifier"
+	case "unicode/combining-mark":
+		return "combining mark in token-like text"
+	default:
+		return normalizeTitle(item.Message)
+	}
+}
+
+func normalizeTitle(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "finding"
+	}
+	if index := strings.Index(message, ":"); index >= 0 {
+		message = message[:index]
+	}
+	message = strings.ToLower(message)
+	return message
+}
+
+func payloadCategory(message string) string {
+	lowered := strings.ToLower(message)
+	switch {
+	case strings.Contains(lowered, "invisible"):
+		return "invisible unicode"
+	case strings.Contains(lowered, "private-use"):
+		return "private-use unicode"
+	default:
+		return "hidden unicode"
+	}
+}
+
+func fingerprint(item finding.Finding) string {
+	return fmt.Sprintf("%s:%s:%d:%d", item.Path, item.RuleID, item.Line, item.Column)
+}
+
+func suspiciousRuneCount(evidence string) int {
+	return strings.Count(evidence, "<U+")
+}
+
+func sortRenderedFindings(findings []renderedFinding) {
+	sort.SliceStable(findings, func(i, j int) bool {
+		if findings[i].Path != findings[j].Path {
+			return findings[i].Path < findings[j].Path
+		}
+		if findings[i].Line != findings[j].Line {
+			return findings[i].Line < findings[j].Line
+		}
+		if findings[i].Column != findings[j].Column {
+			return findings[i].Column < findings[j].Column
+		}
+		if findings[i].RuleID != findings[j].RuleID {
+			return findings[i].RuleID < findings[j].RuleID
+		}
+		return findings[i].Title < findings[j].Title
 	})
-
-	supportingCount := 0
-	severity := finding.SeverityMedium
-	for _, item := range incidents {
-		if severityRank(item.severity) < severityRank(severity) {
-			severity = item.severity
-		}
-		supportingCount += len(item.supporting)
-	}
-	if len(incidents) == 0 {
-		severity = ""
-	}
-
-	return fileReport{
-		path:                 path,
-		severity:             severity,
-		incidents:            incidents,
-		supportingObservaton: supportingCount,
-	}
 }
 
-type sequence struct {
-	kind       incidentKind
-	ruleID     string
-	severity   finding.Severity
-	startLine  int
-	startCol   int
-	endLine    int
-	endCol     int
-	length     int
-	evidence   string
-	suppressed bool
-}
-
-func buildSequences(findings []finding.Finding, kind incidentKind) []sequence {
+func groupRenderedFindings(findings []renderedFinding) []fileReport {
 	if len(findings) == 0 {
 		return nil
 	}
 
-	// Group contiguous single-rune findings before reporting so long runs do not drown the file summary.
-	sequences := make([]sequence, 0)
-	current := sequenceFromFinding(findings[0], kind)
-
-	for _, item := range findings[1:] {
-		if item.Line == current.endLine && item.Column == current.endCol+1 {
-			current.endCol = item.Column
-			current.length++
-			current.evidence = mergeEvidence(current.evidence, item.Evidence)
-			continue
-		}
-
-		sequences = append(sequences, current)
-		current = sequenceFromFinding(item, kind)
-	}
-
-	sequences = append(sequences, current)
-	return sequences
-}
-
-func sequenceFromFinding(item finding.Finding, kind incidentKind) sequence {
-	return sequence{
-		kind:      kind,
-		ruleID:    item.RuleID,
-		severity:  item.Severity,
-		startLine: item.Line,
-		startCol:  item.Column,
-		endLine:   item.Line,
-		endCol:    item.Column,
-		length:    1,
-		evidence:  item.Evidence,
-	}
-}
-
-func mergeEvidence(left, right string) string {
-	if left == "" {
-		return right
-	}
-	return left + right
-}
-
-func buildCorrelationIncidents(payloads, decoders []finding.Finding, invisibleRuns, privateRuns []sequence) ([]incident, []bool, []bool) {
-	usedPayload := make([]bool, len(payloads))
-	usedDecoder := make([]bool, len(decoders))
-	incidents := make([]incident, 0)
-
-	for payloadIndex, payload := range payloads {
-		decoderIndexes := nearbyDecoderIndexes(payload, decoders)
-		if len(decoderIndexes) == 0 {
-			continue
-		}
-
-		nearest := decoderIndexes[0]
-		for _, index := range decoderIndexes[1:] {
-			if lineDistance(payload.Line, decoders[index].Line) < lineDistance(payload.Line, decoders[nearest].Line) {
-				nearest = index
-			}
-		}
-
-		usedPayload[payloadIndex] = true
-		usedDecoder[nearest] = true
-
-		payloadSupport := payloadSupportObservation(payload, invisibleRuns, privateRuns)
-		for index := range invisibleRuns {
-			if overlapsPayload(invisibleRuns[index], payload) {
-				invisibleRuns[index].suppressed = true
-			}
-		}
-		for index := range privateRuns {
-			if overlapsPayload(privateRuns[index], payload) {
-				privateRuns[index].suppressed = true
-			}
-		}
-
-		decoder := decoders[nearest]
-		incidents = append(incidents, incident{
-			kind:      incidentCorrelation,
-			ruleID:    "unicode/correlation",
-			title:     "Hidden Unicode payload with nearby decoder pattern",
-			severity:  finding.SeverityHigh,
-			startLine: payload.Line,
-			startCol:  payload.Column,
-			endLine:   payload.Line,
-			endCol:    payloadEndColumn(payload),
-			why: []string{
-				"Invisible or private-use Unicode can hide an encoded payload.",
-				fmt.Sprintf("A decoder or dynamic execution primitive was found %d line%s away.", lineDistance(payload.Line, decoder.Line), pluralSuffix(lineDistance(payload.Line, decoder.Line))),
-			},
-			evidence: []string{
-				fmt.Sprintf("payload: %s", collapseEvidence(payload.Evidence)),
-				fmt.Sprintf("decoder: %s", decoder.Evidence),
-				fmt.Sprintf("distance: %d line%s", lineDistance(payload.Line, decoder.Line), pluralSuffix(lineDistance(payload.Line, decoder.Line))),
-			},
-			supporting: []supportObservation{
-				payloadSupport,
-				{
-					severity: decoder.Severity,
-					title:    "Decoder pattern",
-					details: []string{
-						fmt.Sprintf("pattern: %s", decoder.Evidence),
-						fmt.Sprintf("line: %d", decoder.Line),
-					},
-					line:     decoder.Line,
-					column:   decoder.Column,
-					sortRank: 1,
-				},
-			},
-			sortRank: 0,
-		})
-	}
-
-	return incidents, usedPayload, usedDecoder
-}
-
-func nearbyDecoderIndexes(payload finding.Finding, decoders []finding.Finding) []int {
-	indexes := make([]int, 0)
-	for index, decoder := range decoders {
-		if payload.Path != decoder.Path {
-			continue
-		}
-		if lineDistance(payload.Line, decoder.Line) > correlationDistanceLines {
-			continue
-		}
-		indexes = append(indexes, index)
-	}
-
-	sort.SliceStable(indexes, func(i, j int) bool {
-		left := decoders[indexes[i]]
-		right := decoders[indexes[j]]
-		if lineDistance(payload.Line, left.Line) != lineDistance(payload.Line, right.Line) {
-			return lineDistance(payload.Line, left.Line) < lineDistance(payload.Line, right.Line)
-		}
-		if left.Line != right.Line {
-			return left.Line < right.Line
-		}
-		return left.Column < right.Column
-	})
-
-	return indexes
-}
-
-func buildPayloadIncident(payload finding.Finding, invisibleRuns, privateRuns []sequence) incident {
-	support := payloadSupportObservation(payload, invisibleRuns, privateRuns)
-	for index := range invisibleRuns {
-		if overlapsPayload(invisibleRuns[index], payload) {
-			invisibleRuns[index].suppressed = true
-		}
-	}
-	for index := range privateRuns {
-		if overlapsPayload(privateRuns[index], payload) {
-			privateRuns[index].suppressed = true
-		}
-	}
-
-	details := []string{
-		fmt.Sprintf("payload: %s", collapseEvidence(payload.Evidence)),
-	}
-	why := []string{
-		"Long or dense runs of hidden Unicode can indicate an encoded payload embedded in source text.",
-	}
-
-	if strings.Contains(payload.Message, "density") {
-		why = append(why, "This sequence is fragmented rather than contiguous, which is still suspicious when the local density is high.")
-	}
-
-	return incident{
-		kind:      incidentPayload,
-		ruleID:    payload.RuleID,
-		title:     "Suspicious encoded payload sequence",
-		severity:  payload.Severity,
-		startLine: payload.Line,
-		startCol:  payload.Column,
-		endLine:   payload.Line,
-		endCol:    payloadEndColumn(payload),
-		why:       why,
-		evidence:  details,
-		supporting: []supportObservation{
-			support,
-		},
-		sortRank: 3,
-	}
-}
-
-func payloadSupportObservation(payload finding.Finding, invisibleRuns, privateRuns []sequence) supportObservation {
-	for _, run := range invisibleRuns {
-		if overlapsPayload(run, payload) {
-			return supportObservation{
-				severity: run.severity,
-				title:    "Invisible Unicode sequence",
-				details: []string{
-					fmt.Sprintf("start: line %d col %d", run.startLine, run.startCol),
-					fmt.Sprintf("length: %d", run.length),
-				},
-				line:     run.startLine,
-				column:   run.startCol,
-				sortRank: 0,
-			}
-		}
-	}
-
-	for _, run := range privateRuns {
-		if overlapsPayload(run, payload) {
-			return supportObservation{
-				severity: run.severity,
-				title:    "Private-use Unicode sequence",
-				details: []string{
-					fmt.Sprintf("start: line %d col %d", run.startLine, run.startCol),
-					fmt.Sprintf("length: %d", run.length),
-				},
-				line:     run.startLine,
-				column:   run.startCol,
-				sortRank: 0,
-			}
-		}
-	}
-
-	return supportObservation{
-		severity: payload.Severity,
-		title:    "Payload finding",
-		details: []string{
-			fmt.Sprintf("line: %d", payload.Line),
-			fmt.Sprintf("evidence: %s", collapseEvidence(payload.Evidence)),
-		},
-		line:     payload.Line,
-		column:   payload.Column,
-		sortRank: 0,
-	}
-}
-
-func overlapsPayload(run sequence, payload finding.Finding) bool {
-	if run.startLine != payload.Line {
-		return false
-	}
-	endCol := payloadEndColumn(payload)
-	return run.startCol <= endCol && run.endCol >= payload.Column
-}
-
-func payloadEndColumn(payload finding.Finding) int {
-	length := payloadEvidenceLength(payload.Evidence)
-	if length <= 1 {
-		return payload.Column
-	}
-	return payload.Column + length - 1
-}
-
-func payloadEvidenceLength(evidence string) int {
-	tokens := tokenizeEvidence(evidence)
-	count := 0
-	for _, token := range tokens {
-		if token.kind == evidenceTokenHidden {
-			count++
-		}
-	}
-	if count == 0 {
-		return 1
-	}
-	return count
-}
-
-func buildSequenceIncident(run sequence) incident {
-	title := "Invisible Unicode sequence"
-	why := []string{
-		"Invisible Unicode can hide code or alter tokens without appearing in editors or diffs.",
-	}
-	if run.kind == incidentPrivateUse {
-		title = "Suspicious private-use Unicode payload"
-		why = []string{
-			"Private-use Unicode has no standard visible meaning and can carry hidden data.",
-		}
-	}
-
-	return incident{
-		kind:      run.kind,
-		ruleID:    run.ruleID,
-		title:     title,
-		severity:  run.severity,
-		startLine: run.startLine,
-		startCol:  run.startCol,
-		endLine:   run.endLine,
-		endCol:    run.endCol,
-		why:       why,
-		evidence: []string{
-			collapseEvidence(run.evidence),
-		},
-		sortRank: 4,
-	}
-}
-
-func buildLocationIncident(kind incidentKind, ruleID, title string, severity finding.Severity, findings []finding.Finding, why []string) incident {
-	locations := make([]string, 0, len(findings))
+	files := make([]fileReport, 0)
+	current := fileReport{path: findings[0].Path}
 	for _, item := range findings {
-		locations = append(locations, fmt.Sprintf("line %d col %d  %s", item.Line, item.Column, item.Evidence))
-	}
-
-	return incident{
-		kind:      kind,
-		ruleID:    ruleID,
-		title:     title,
-		severity:  severity,
-		startLine: findings[0].Line,
-		startCol:  findings[0].Column,
-		endLine:   findings[len(findings)-1].Line,
-		endCol:    findings[len(findings)-1].Column,
-		why:       why,
-		locations: locations,
-		sortRank:  1,
-	}
-}
-
-func buildSingleFindingIncident(item finding.Finding) incident {
-	title := item.Message
-	why := []string{defaultWhy(item.RuleID)}
-
-	return incident{
-		kind:      ruleIncidentKind(item.RuleID),
-		ruleID:    item.RuleID,
-		title:     title,
-		severity:  item.Severity,
-		startLine: item.Line,
-		startCol:  item.Column,
-		endLine:   item.Line,
-		endCol:    item.Column,
-		why:       why,
-		evidence: []string{
-			fmt.Sprintf("evidence: %s", collapseEvidence(item.Evidence)),
-		},
-		sortRank: singleFindingRank(item.RuleID),
-	}
-}
-
-func ruleIncidentKind(ruleID string) incidentKind {
-	switch ruleID {
-	case "unicode/decoder":
-		return incidentDecoder
-	case "unicode/mixed-script":
-		return incidentMixedScript
-	case "unicode/combining-mark":
-		return incidentCombining
-	default:
-		return incidentOther
-	}
-}
-
-func defaultWhy(ruleID string) string {
-	switch ruleID {
-	case "unicode/decoder":
-		return "Decoder and dynamic execution patterns often appear when hidden content is decoded or executed at runtime."
-	case "unicode/mixed-script":
-		return "Mixed-script identifiers can impersonate trusted names while looking similar to reviewers."
-	case "unicode/combining-mark":
-		return "Combining marks can create deceptive identifiers that render differently across tools."
-	default:
-		return "This finding indicates suspicious Unicode behavior that warrants review."
-	}
-}
-
-func singleFindingRank(ruleID string) int {
-	switch ruleID {
-	case "unicode/decoder":
-		return 2
-	case "unicode/mixed-script":
-		return 5
-	case "unicode/combining-mark":
-		return 6
-	default:
-		return 7
-	}
-}
-
-type evidenceTokenType int
-
-const (
-	evidenceTokenText evidenceTokenType = iota
-	evidenceTokenHidden
-)
-
-type evidenceToken struct {
-	kind  evidenceTokenType
-	value string
-}
-
-func tokenizeEvidence(evidence string) []evidenceToken {
-	tokens := make([]evidenceToken, 0)
-	for len(evidence) > 0 {
-		start := strings.IndexByte(evidence, '<')
-		if start == -1 {
-			tokens = append(tokens, evidenceToken{kind: evidenceTokenText, value: evidence})
-			return tokens
+		if item.Path != current.path {
+			files = append(files, current)
+			current = fileReport{path: item.Path}
 		}
-		if start > 0 {
-			tokens = append(tokens, evidenceToken{kind: evidenceTokenText, value: evidence[:start]})
-			evidence = evidence[start:]
+		current.findings = append(current.findings, item)
+	}
+	files = append(files, current)
+	return files
+}
+
+func newConsoleWriter(w io.Writer, color bool) zerolog.ConsoleWriter {
+	console := zerolog.ConsoleWriter{
+		Out:        w,
+		TimeFormat: "3:04PM",
+		NoColor:    !color,
+	}
+	console.PartsOrder = []string{"time", "level", "message"}
+	console.FormatMessage = func(value any) string {
+		return fmt.Sprint(value)
+	}
+	return console
+}
+
+func (r *HumanReporter) writeHeader(version string, silent bool) error {
+	if silent {
+		return nil
+	}
+	if err := r.writer.linef(startupBanner); err != nil {
+		return err
+	}
+	if err := r.writer.blankLine(); err != nil {
+		return err
+	}
+	if err := r.writer.linef(version); err != nil {
+		return err
+	}
+	return r.writer.blankLine()
+}
+
+func (r *HumanReporter) writeRuntimeSummary(model reportModel) error {
+	if err := r.writeInfo(
+		fmt.Sprintf(
+			"scanned %s files (%s) in %s",
+			formatInt(model.runtime.FilesScanned),
+			formatBytes(model.runtime.BytesScanned),
+			formatDuration(model.runtime.ScanDuration),
+		),
+	); err != nil {
+		return err
+	}
+	if err := r.writeInfo(
+		fmt.Sprintf(
+			"skipped %s files (%s)",
+			formatInt(model.summary.skippedTotal),
+			formatSkipBreakdown(model.runtime.SkippedByReason),
+		),
+	); err != nil {
+		return err
+	}
+	if model.runtime.RecoverableFileErrors > 0 {
+		if err := r.writeWarn(
+			fmt.Sprintf(
+				"%s file scan error%s",
+				formatInt(model.runtime.RecoverableFileErrors),
+				plural(model.runtime.RecoverableFileErrors),
+			),
+		); err != nil {
+			return err
+		}
+	}
+	if model.summary.totalFindings == 0 {
+		if err := r.writeInfo(fmt.Sprintf("%s no suspicious unicode patterns found", r.palette.ok("OK"))); err != nil {
+			return err
+		}
+	} else if !model.verbose {
+		if err := r.writeWarn(r.palette.finding(fmt.Sprintf("suspicious pattern found: %d", model.summary.totalFindings))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *HumanReporter) writeInfo(message string) error {
+	return r.writeLog(func(logger zerolog.Logger) {
+		logger.Info().Msg(message)
+	})
+}
+
+func (r *HumanReporter) writeWarn(message string) error {
+	return r.writeLog(func(logger zerolog.Logger) {
+		logger.Warn().Msg(message)
+	})
+}
+
+func (r *HumanReporter) writeLog(emit func(logger zerolog.Logger)) error {
+	var buffer bytes.Buffer
+	logger := zerolog.New(newConsoleWriter(&buffer, r.color)).With().Timestamp().Logger()
+	emit(logger)
+	_, err := io.Copy(r.writer.w, &buffer)
+	return err
+}
+
+func (r *HumanReporter) writeVerboseFinding(item renderedFinding) error {
+	if err := r.writeField("Finding", r.palette.finding(titleCase(item.Title))); err != nil {
+		return err
+	}
+	if item.Evidence != "" {
+		if err := r.writeField("Evidence", item.Evidence); err != nil {
+			return err
+		}
+	}
+	if err := r.writeField("RuleID", item.RuleID); err != nil {
+		return err
+	}
+	if err := r.writeField("File", item.Path); err != nil {
+		return err
+	}
+	if err := r.writeField("Line", strconv.Itoa(item.Line)); err != nil {
+		return err
+	}
+	if err := r.writeField("Column", strconv.Itoa(item.Column)); err != nil {
+		return err
+	}
+	if item.Character != "" {
+		if err := r.writeField("Character", item.Character); err != nil {
+			return err
+		}
+	}
+	if item.Count > 0 {
+		if err := r.writeField("Count", fmt.Sprintf("%d suspicious runes", item.Count)); err != nil {
+			return err
+		}
+	}
+	if item.Category != "" {
+		if err := r.writeField("Category", item.Category); err != nil {
+			return err
+		}
+	}
+	if item.Context != "" {
+		if err := r.writeBlock("Context", item.Context); err != nil {
+			return err
+		}
+	}
+	if item.Correlation != "" {
+		if err := r.writeBlock("Correlation", item.Correlation); err != nil {
+			return err
+		}
+	}
+	if item.Explanation != "" {
+		if err := r.writeBlock("Explanation", item.Explanation); err != nil {
+			return err
+		}
+	}
+	return r.writeField("Fingerprint", item.Fingerprint)
+}
+
+func (r *HumanReporter) writeField(label, value string) error {
+	return r.writer.linef("%s %s", r.palette.label(fmt.Sprintf("%-12s", label+":")), value)
+}
+
+func (r *HumanReporter) writeBlock(label, value string) error {
+	if err := r.writer.linef("%s:", label); err != nil {
+		return err
+	}
+	for line := range strings.SplitSeq(value, "\n") {
+		if err := r.writer.linef("  %s", line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func formatBytes(size int64) string {
+	if size < 1000 {
+		return fmt.Sprintf("%d B", size)
+	}
+	units := []string{"KB", "MB", "GB", "TB"}
+	value := float64(size)
+	unitIndex := -1
+	for value >= 1000 && unitIndex < len(units)-1 {
+		value /= 1000
+		unitIndex++
+	}
+	return fmt.Sprintf("%.1f %s", value, units[unitIndex])
+}
+
+func formatDuration(duration time.Duration) string {
+	switch {
+	case duration >= time.Second:
+		return duration.Round(time.Millisecond).String()
+	case duration >= time.Millisecond:
+		return duration.Round(time.Millisecond).String()
+	case duration > 0:
+		return duration.Round(time.Microsecond).String()
+	default:
+		return "0s"
+	}
+}
+
+func formatSkipBreakdown(counts []Count) string {
+	ordered := []string{"binary_nul", "excluded", "too_large", "symlink", "not_regular"}
+	labels := map[string]string{
+		"binary_nul":  "binary",
+		"excluded":    "excluded",
+		"too_large":   "oversize",
+		"symlink":     "symlink",
+		"not_regular": "non-regular",
+	}
+
+	indexed := make(map[string]int, len(counts))
+	for _, item := range counts {
+		indexed[item.Label] = item.Value
+	}
+
+	parts := make([]string, 0, len(counts))
+	seen := make(map[string]bool, len(counts))
+	for _, key := range ordered {
+		value, ok := indexed[key]
+		if !ok {
 			continue
 		}
-
-		end := strings.IndexByte(evidence, '>')
-		if end == -1 {
-			tokens = append(tokens, evidenceToken{kind: evidenceTokenText, value: evidence})
-			return tokens
-		}
-
-		tokens = append(tokens, evidenceToken{kind: evidenceTokenHidden, value: evidence[:end+1]})
-		evidence = evidence[end+1:]
+		seen[key] = true
+		parts = append(parts, fmt.Sprintf("%s: %s", labels[key], formatInt(value)))
 	}
 
-	return tokens
+	extraKeys := make([]string, 0)
+	for key := range indexed {
+		if seen[key] {
+			continue
+		}
+		extraKeys = append(extraKeys, key)
+	}
+	sort.Strings(extraKeys)
+	for _, key := range extraKeys {
+		parts = append(parts, fmt.Sprintf("%s: %s", key, formatInt(indexed[key])))
+	}
+
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
 }
 
-func collapseEvidence(evidence string) string {
-	tokens := tokenizeEvidence(evidence)
-	if len(tokens) == 0 {
-		return evidence
+func formatInt(value int) string {
+	text := strconv.Itoa(value)
+	if value < 1000 {
+		return text
 	}
 
 	var builder strings.Builder
-	for index := 0; index < len(tokens); {
-		token := tokens[index]
-		if token.kind == evidenceTokenText {
-			builder.WriteString(token.value)
-			index++
-			continue
-		}
-
-		count := 1
-		for index+count < len(tokens) && tokens[index+count].kind == evidenceTokenHidden && tokens[index+count].value == token.value {
-			count++
-		}
-
-		builder.WriteString(token.value)
-		if count > 1 {
-			builder.WriteString(" x ")
-			builder.WriteString(strconv.Itoa(count))
-		}
-
-		index += count
+	prefixLen := len(text) % 3
+	if prefixLen == 0 {
+		prefixLen = 3
 	}
-
+	builder.WriteString(text[:prefixLen])
+	for index := prefixLen; index < len(text); index += 3 {
+		builder.WriteByte(',')
+		builder.WriteString(text[index : index+3])
+	}
 	return builder.String()
 }
 
-func summarize(files []fileReport, filesScanned int) summary {
-	if filesScanned == 0 {
-		filesScanned = len(files)
+func less(left, right finding.Finding) bool {
+	if left.Line != right.Line {
+		return left.Line < right.Line
 	}
-
-	counts := make(map[finding.Severity]int)
-	concerns := make(map[string]map[string]struct{})
-
-	for _, file := range files {
-		for _, item := range file.incidents {
-			counts[item.severity]++
-			label := concernLabel(item)
-			if concerns[label] == nil {
-				concerns[label] = make(map[string]struct{})
-			}
-			concerns[label][file.path] = struct{}{}
-		}
+	if left.Column != right.Column {
+		return left.Column < right.Column
 	}
-
-	severityCounts := make([]severityCount, 0, len(counts))
-	for severity, count := range counts {
-		severityCounts = append(severityCounts, severityCount{severity: severity, count: count})
+	if left.RuleID != right.RuleID {
+		return left.RuleID < right.RuleID
 	}
-	sort.Slice(severityCounts, func(i, j int) bool {
-		if severityRank(severityCounts[i].severity) != severityRank(severityCounts[j].severity) {
-			return severityRank(severityCounts[i].severity) < severityRank(severityCounts[j].severity)
-		}
-		return severityCounts[i].severity < severityCounts[j].severity
-	})
-
-	top := make([]topConcern, 0, len(concerns))
-	for label, files := range concerns {
-		top = append(top, topConcern{label: label, files: len(files)})
-	}
-	sort.Slice(top, func(i, j int) bool {
-		if top[i].files != top[j].files {
-			return top[i].files > top[j].files
-		}
-		return top[i].label < top[j].label
-	})
-	if len(top) > 3 {
-		top = top[:3]
-	}
-
-	result := "CLEAN"
-	if len(files) > 0 {
-		result = "FINDINGS DETECTED"
-	}
-
-	return summary{
-		result:            result,
-		filesScanned:      filesScanned,
-		filesWithFindings: len(files),
-		severityCounts:    severityCounts,
-		topConcerns:       top,
-	}
-}
-
-func concernLabel(item incident) string {
-	switch item.kind {
-	case incidentCorrelation:
-		return "Hidden Unicode payload with nearby decoder pattern"
-	case incidentBidi:
-		return "Trojan Source bidi control characters detected"
-	case incidentPrivateUse:
-		return "Private-use Unicode payload sequences"
-	case incidentPayload:
-		return "Suspicious encoded payload sequences"
-	case incidentInvisible:
-		return "Invisible Unicode sequences"
-	case incidentControl:
-		return "Suspicious directional control characters"
-	case incidentDecoder:
-		return "Nearby decoder and dynamic execution patterns"
-	case incidentMixedScript:
-		return "Mixed-script identifiers"
-	case incidentCombining:
-		return "Combining marks in token-like text"
-	default:
-		return item.title
-	}
-}
-
-func (r *HumanReporter) writeHeader(s summary) error {
-	if err := r.writer.linef("ghostscan"); err != nil {
-		return err
-	}
-	if err := r.writer.linef("========="); err != nil {
-		return err
-	}
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	if err := r.writer.linef("Result: %s", r.renderResult(s.result, s.severityCounts)); err != nil {
-		return err
-	}
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	if err := r.writer.linef("Files scanned: %d", s.filesScanned); err != nil {
-		return err
-	}
-	if err := r.writer.linef("Files with findings: %d", s.filesWithFindings); err != nil {
-		return err
-	}
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	if err := r.writer.linef("%s:", r.palette.bold("Severity")); err != nil {
-		return err
-	}
-	for _, item := range s.severityCounts {
-		if err := r.writer.linef("  %-6s %d", r.renderSeverity(string(item.severity), item.severity), item.count); err != nil {
-			return err
-		}
-	}
-	if len(s.severityCounts) == 0 {
-		if err := r.writer.linef("  none   0"); err != nil {
-			return err
-		}
-	}
-
-	if len(s.topConcerns) == 0 {
-		return nil
-	}
-
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	if err := r.writer.linef("%s:", r.palette.bold("Top concerns")); err != nil {
-		return err
-	}
-	for index, item := range s.topConcerns {
-		if err := r.writer.linef("  %d. %s in %d file%s", index+1, item.label, item.files, pluralSuffix(item.files)); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *HumanReporter) renderResult(result string, severities []severityCount) string {
-	if result != "FINDINGS DETECTED" {
-		return r.palette.bold(result)
-	}
-	for _, item := range severities {
-		if item.severity == finding.SeverityHigh {
-			return r.palette.high(result)
-		}
-	}
-	return r.palette.medium(result)
-}
-
-func (r *HumanReporter) writeFile(file fileReport) error {
-	header := fmt.Sprintf("-- %s ", file.path)
-	if padding := 70 - len(header); padding > 0 {
-		header += strings.Repeat("-", padding)
-	}
-	if err := r.writer.linef("%s", r.palette.header(header)); err != nil {
-		return err
-	}
-	if err := r.writer.linef("Severity: %s", r.renderSeverity(string(file.severity), file.severity)); err != nil {
-		return err
-	}
-	if err := r.writer.linef("Incidents: %d", len(file.incidents)); err != nil {
-		return err
-	}
-	if err := r.writer.linef("Supporting observations: %d", file.supportingObservaton); err != nil {
-		return err
-	}
-
-	for _, item := range file.incidents {
-		if err := r.writer.blankLine(); err != nil {
-			return err
-		}
-		if err := r.writeIncident(item); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *HumanReporter) writeIncident(item incident) error {
-	if err := r.writer.linef("[%s] %s", r.renderSeverity(string(item.severity), item.severity), item.title); err != nil {
-		return err
-	}
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	if err := r.writer.linef("Rule: %s", item.ruleID); err != nil {
-		return err
-	}
-	if len(item.locations) == 0 {
-		if err := r.writer.linef("Location: %s", formatLocation(item.startLine, item.startCol, item.endLine, item.endCol)); err != nil {
-			return err
-		}
-		if item.kind == incidentInvisible || item.kind == incidentPrivateUse {
-			if err := r.writer.linef("Length: %d characters", item.endCol-item.startCol+1); err != nil {
-				return err
-			}
-		}
-	}
-
-	if len(item.why) > 0 {
-		if err := r.writer.blankLine(); err != nil {
-			return err
-		}
-		if err := r.writer.linef("%s:", r.palette.bold("Why this matters")); err != nil {
-			return err
-		}
-		for _, line := range item.why {
-			if err := r.writer.linef("  %s", line); err != nil {
-				return err
-			}
-		}
-	}
-
-	if len(item.evidence) > 0 {
-		if err := r.writer.blankLine(); err != nil {
-			return err
-		}
-		if err := r.writer.linef("%s:", r.palette.bold("Evidence")); err != nil {
-			return err
-		}
-		for _, line := range item.evidence {
-			if err := r.writer.linef("  %s", line); err != nil {
-				return err
-			}
-		}
-	}
-
-	if len(item.locations) > 0 {
-		if err := r.writer.blankLine(); err != nil {
-			return err
-		}
-		if err := r.writer.linef("%s:", r.palette.bold("Locations")); err != nil {
-			return err
-		}
-		for _, line := range item.locations {
-			if err := r.writer.linef("  %s", line); err != nil {
-				return err
-			}
-		}
-	}
-
-	if len(item.supporting) == 0 {
-		return nil
-	}
-
-	sort.SliceStable(item.supporting, func(i, j int) bool {
-		if item.supporting[i].line != item.supporting[j].line {
-			return item.supporting[i].line < item.supporting[j].line
-		}
-		if item.supporting[i].column != item.supporting[j].column {
-			return item.supporting[i].column < item.supporting[j].column
-		}
-		if item.supporting[i].sortRank != item.supporting[j].sortRank {
-			return item.supporting[i].sortRank < item.supporting[j].sortRank
-		}
-		return item.supporting[i].title < item.supporting[j].title
-	})
-
-	if err := r.writer.blankLine(); err != nil {
-		return err
-	}
-	if err := r.writer.linef("%s:", r.palette.bold("Supporting observations")); err != nil {
-		return err
-	}
-	for _, support := range item.supporting {
-		if err := r.writer.linef("  [%s] %s", r.renderSeverity(string(support.severity), support.severity), support.title); err != nil {
-			return err
-		}
-		for _, detail := range support.details {
-			if err := r.writer.linef("    %s", detail); err != nil {
-				return err
-			}
-		}
-		if err := r.writer.blankLine(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *HumanReporter) renderSeverity(label string, severity finding.Severity) string {
-	switch severity {
-	case finding.SeverityHigh:
-		return r.palette.high(label)
-	case finding.SeverityMedium:
-		return r.palette.medium(label)
-	default:
-		return label
-	}
-}
-
-func formatLocation(startLine, startCol, endLine, endCol int) string {
-	if startLine == endLine && startCol == endCol {
-		return fmt.Sprintf("line %d, col %d", startLine, startCol)
-	}
-	if startLine == endLine {
-		return fmt.Sprintf("line %d, col %d -> line %d, col %d", startLine, startCol, endLine, endCol)
-	}
-	return fmt.Sprintf("line %d, col %d -> line %d, col %d", startLine, startCol, endLine, endCol)
-}
-
-func severityRank(severity finding.Severity) int {
-	switch severity {
-	case finding.SeverityHigh:
-		return 0
-	case finding.SeverityMedium:
-		return 1
-	default:
-		return 2
-	}
+	return left.Message < right.Message
 }
 
 func lineDistance(left, right int) int {
@@ -1086,9 +826,18 @@ func lineDistance(left, right int) int {
 	return right - left
 }
 
-func pluralSuffix(value int) string {
+func plural(value int) string {
 	if value == 1 {
 		return ""
 	}
 	return "s"
+}
+
+func titleCase(value string) string {
+	if value == "" {
+		return value
+	}
+	runes := []rune(value)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }

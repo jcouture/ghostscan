@@ -81,9 +81,6 @@ func assertFinding(t *testing.T, got finding.Finding, wantPath string, wantLine,
 	if got.RuleID != InvisibleRuleID {
 		t.Fatalf("Finding.RuleID = %q, want %q", got.RuleID, InvisibleRuleID)
 	}
-	if got.Severity != finding.SeverityMedium {
-		t.Fatalf("Finding.Severity = %q, want %q", got.Severity, finding.SeverityMedium)
-	}
 	if got.Evidence != wantEvidence {
 		t.Fatalf("Finding.Evidence = %q, want %q", got.Evidence, wantEvidence)
 	}

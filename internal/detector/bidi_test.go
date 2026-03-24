@@ -150,9 +150,6 @@ func assertBidiFinding(
 	if got.RuleID != BidiRuleID {
 		t.Fatalf("Finding.RuleID = %q, want %q", got.RuleID, BidiRuleID)
 	}
-	if got.Severity != finding.SeverityHigh {
-		t.Fatalf("Finding.Severity = %q, want %q", got.Severity, finding.SeverityHigh)
-	}
 	if got.Message != wantMessage {
 		t.Fatalf("Finding.Message = %q, want %q", got.Message, wantMessage)
 	}

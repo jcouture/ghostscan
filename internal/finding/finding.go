@@ -21,12 +21,13 @@
 package finding
 
 type Finding struct {
-	Path     string
-	Line     int
-	Column   int
-	RuleID   string
-	Severity Severity
-	Message  string
-	Evidence string
-	Context  string
+	Path      string
+	Line      int
+	Column    int
+	EndLine   int
+	EndColumn int
+	RuleID    string
+	Message   string
+	Evidence  string
+	Context   string
 }

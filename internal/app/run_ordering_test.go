@@ -38,8 +38,9 @@ func TestRunSortsAggregatedFindingsBeforeReporting(t *testing.T) {
 
 	var stdout bytes.Buffer
 	result, err := Run(context.Background(), Options{
-		Path:   root,
-		Stdout: &stdout,
+		Path:    root,
+		Stdout:  &stdout,
+		Verbose: true,
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -50,8 +51,8 @@ func TestRunSortsAggregatedFindingsBeforeReporting(t *testing.T) {
 	}
 
 	output := stdout.String()
-	firstIndex := strings.Index(output, "-- "+filepath.Join(root, "a-first.txt"))
-	lastIndex := strings.Index(output, "-- "+filepath.Join(root, "z-last.txt"))
+	firstIndex := strings.Index(output, filepath.Join(root, "a-first.txt"))
+	lastIndex := strings.Index(output, filepath.Join(root, "z-last.txt"))
 	if firstIndex == -1 || lastIndex == -1 {
 		t.Fatalf("stdout = %q, want both file entries", output)
 	}

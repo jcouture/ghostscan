@@ -112,7 +112,6 @@ func detectMixedScriptToken(path string, token []Observation) (finding.Finding, 
 		Line:     token[0].Line,
 		Column:   token[0].Column,
 		RuleID:   MixedScriptRuleID,
-		Severity: finding.SeverityHigh,
 		Message:  fmt.Sprintf("Suspicious mixed-script token detected: token mixes Latin with %s letters", joinScriptNames(suspiciousScripts)),
 		Evidence: fmt.Sprintf("%q (%s)", tokenText, strings.Join(suspiciousRunes, ", ")),
 	}, true

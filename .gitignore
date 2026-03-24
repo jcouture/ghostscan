@@ -23,8 +23,9 @@ profile.cov
 go.work
 go.work.sum
 
-# Build cache
+# Build and module cache
 .gocache/
+.gomodcache/
 
 # env file
 .env
