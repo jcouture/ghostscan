@@ -141,6 +141,24 @@ The current scanner behavior is intentionally narrow and real:
 - Skips `.git`, `node_modules`, `vendor`, `dist`, `build`, `target`, `out`, and `coverage`.
 - Never executes scanned code or fetches network resources.
 
+## FAQ
+
+**I downloaded `ghostscan` on macOS and it is blocked by Gatekeeper. What should I do?**
+
+Remove the quarantine attribute from the binary:
+
+```bash
+xattr -d com.apple.quarantine ghostscan
+```
+
+**Does `ghostscan` run or decode the code it scans?**
+
+No. It only performs static checks on file contents.
+
+**Can I scan a single file instead of a whole repository?**
+
+Yes. Pass the file path directly to `ghostscan`.
+
 ## License
 
 See [LICENSE](LICENSE) for details.
