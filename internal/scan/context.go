@@ -20,6 +20,8 @@
 
 package scan
 
+import "github.com/jcouture/ghostscan/internal/detector"
+
 type Context struct {
 	Path         string
 	Content      []byte
@@ -30,35 +32,8 @@ type Context struct {
 	Prepass      Prepass
 }
 
-type Observation struct {
-	Rune       rune
-	ByteOffset int
-	Line       int
-	Column     int
-	Width      int
-}
+type Observation = detector.Observation
 
-type Prepass struct {
-	Ready                bool
-	HasInvisible         bool
-	HasPrivateUse        bool
-	HasBidi              bool
-	HasDirectional       bool
-	InvisibleCount       int
-	PrivateUseCount      int
-	BidiCount            int
-	DirectionalCount     int
-	LongestInvisibleRun  int
-	LongestPrivateUseRun int
-	DecoderMarkers       []Marker
-}
+type Prepass = detector.Prepass
 
-type Marker struct {
-	Kind     string
-	Marker   string
-	Message  string
-	Line     int
-	Column   int
-	Offset   int
-	Evidence string
-}
+type Marker = detector.DecoderMarker

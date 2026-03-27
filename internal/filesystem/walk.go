@@ -87,11 +87,6 @@ func Discover(root string, maxFileSize int64) (Discovery, error) {
 		if path == absoluteRoot {
 			if isExcludedDirectory(entry.Name()) {
 				stats.DirectoriesPruned++
-				count, err := countExcludedFiles(path)
-				if err != nil {
-					return err
-				}
-				stats.Skipped.addN(EligibilityReasonExcluded, count)
 				return filepath.SkipDir
 			}
 			return nil
@@ -105,11 +100,6 @@ func Discover(root string, maxFileSize int64) (Discovery, error) {
 		if entry.IsDir() {
 			if isExcludedDirectory(entry.Name()) {
 				stats.DirectoriesPruned++
-				count, err := countExcludedFiles(path)
-				if err != nil {
-					return err
-				}
-				stats.Skipped.addN(EligibilityReasonExcluded, count)
 				return filepath.SkipDir
 			}
 			return nil
@@ -140,30 +130,4 @@ func Discover(root string, maxFileSize int64) (Discovery, error) {
 
 	sort.Strings(candidates)
 	return Discovery{Candidates: candidates, Stats: stats}, nil
-}
-
-func countExcludedFiles(root string) (int, error) {
-	count := 0
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return fmt.Errorf("walk excluded directory %q: %w", path, walkErr)
-		}
-		if path == root {
-			return nil
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if isSymlink(entry.Type()) {
-			return nil
-		}
-		if isRegularFileCandidate(entry.Type()) {
-			count++
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
 }

@@ -65,6 +65,7 @@ type RuntimeStats struct {
 	ScanDuration          time.Duration
 	FilesDiscovered       int
 	FilesScanned          int
+	DirectoriesPruned     int
 	BytesScanned          int64
 	RecoverableFileErrors int
 	SkippedByReason       []Count
@@ -602,6 +603,21 @@ func (r *HumanReporter) writeRuntimeSummary(model reportModel) error {
 		),
 	); err != nil {
 		return err
+	}
+	if model.runtime.DirectoriesPruned > 0 {
+		label := "directories"
+		if model.runtime.DirectoriesPruned == 1 {
+			label = "directory"
+		}
+		if err := r.writeInfo(
+			fmt.Sprintf(
+				"pruned %s excluded %s",
+				formatInt(model.runtime.DirectoriesPruned),
+				label,
+			),
+		); err != nil {
+			return err
+		}
 	}
 	if model.runtime.RecoverableFileErrors > 0 {
 		if err := r.writeWarn(

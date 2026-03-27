@@ -63,8 +63,11 @@ func TestDiscoverDirectoryRoot(t *testing.T) {
 	if !reflect.DeepEqual(discovery.Candidates, want) {
 		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
 	}
-	if got := discovery.Stats.Skipped.ByReason[EligibilityReasonExcluded]; got != 8 {
-		t.Fatalf("excluded skipped count = %d, want 8", got)
+	if discovery.Stats.DirectoriesPruned != 8 {
+		t.Fatalf("DirectoriesPruned = %d, want 8", discovery.Stats.DirectoriesPruned)
+	}
+	if got := discovery.Stats.Skipped.ByReason[EligibilityReasonExcluded]; got != 0 {
+		t.Fatalf("excluded skipped count = %d, want 0", got)
 	}
 }
 

@@ -111,4 +111,4 @@ clean:
 help:
 	@echo "$(APP) - Available targets:"
 	@echo ""
-	@awk '/^##/{help=$$0; sub(/^## */, "", help); next} /^[[:alnum:]_.-]+:/{target=$$1; sub(/:.*/, "", target); if(help){printf "  \\033[36m%-18s\\033[0m %s\\n", target, help; help=""}}' $(MAKEFILE_LIST)
+	@awk '/^##/{help=$$0; sub(/^## */, "", help); next} /^[[:alnum:]_.-]+:/{target=$$1; sub(/:.*/, "", target); if(help){printf "  \033[36m%-18s\033[0m %s\n", target, help; help=""}}' $(MAKEFILE_LIST)

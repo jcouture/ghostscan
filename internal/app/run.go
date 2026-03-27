@@ -105,6 +105,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			ScanDuration:          scanDuration,
 			FilesDiscovered:       discovery.Stats.FilesDiscovered,
 			FilesScanned:          len(results),
+			DirectoriesPruned:     discovery.Stats.DirectoriesPruned,
 			BytesScanned:          bytesScanned,
 			RecoverableFileErrors: len(scanErrors),
 			SkippedByReason:       sortedSkipCounts(discovery.Stats.Skipped.ByReason),
@@ -138,7 +139,7 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 	for range workerCount {
 		go func() {
 			for job := range jobs {
-				result, err := engine.ScanFileDetailed(ctx, job.path)
+				result, err := engine.ScanTrustedTextFileDetailed(ctx, job.path)
 				results <- fileScanResult{
 					path:     job.path,
 					findings: result.Findings,
