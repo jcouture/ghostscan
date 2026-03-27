@@ -181,24 +181,16 @@ func detectPayloadDensity(file File) []finding.Finding {
 				if info.suspiciousCount > last.suspiciousCount {
 					last.suspiciousCount = info.suspiciousCount
 				}
-				for _, class := range info.classes {
-					if !last.classSet[class] {
-						last.classSet[class] = true
-						last.classes = append(last.classes, class)
-					}
+				for _, class := range info.classSlice() {
+					addPayloadClass(&last.classes, &last.classCount, class)
 				}
 			} else {
-				classSet := make(map[payloadClass]bool, len(info.classes))
-				for _, class := range info.classes {
-					classSet[class] = true
-				}
-
 				windows = append(windows, payloadDensityWindowFinding{
 					start:           start,
 					end:             end,
 					suspiciousCount: info.suspiciousCount,
-					classes:         append([]payloadClass(nil), info.classes...),
-					classSet:        classSet,
+					classes:         info.classes,
+					classCount:      info.classCount,
 				})
 			}
 		}
@@ -220,7 +212,7 @@ func detectPayloadDensity(file File) []finding.Finding {
 			EndLine:   end.Line,
 			EndColumn: end.Column,
 			RuleID:    PayloadRuleID,
-			Message:   fmt.Sprintf("Suspicious encoded payload density detected: %d suspicious Unicode characters in a %d-character window (%s)", window.suspiciousCount, payloadDensityWindow, joinPayloadClasses(window.classes)),
+			Message:   fmt.Sprintf("Suspicious encoded payload density detected: %d suspicious Unicode characters in a %d-character window (%s)", window.suspiciousCount, payloadDensityWindow, joinPayloadClasses(window.classSlice())),
 			Evidence:  renderPayloadDensityWindow(observations),
 		})
 	}
@@ -232,13 +224,14 @@ type payloadDensityWindowFinding struct {
 	start           int
 	end             int
 	suspiciousCount int
-	classes         []payloadClass
-	classSet        map[payloadClass]bool
+	classes         [4]payloadClass
+	classCount      int
 }
 
 type payloadDensityInfo struct {
 	suspiciousCount int
-	classes         []payloadClass
+	classes         [4]payloadClass
+	classCount      int
 }
 
 type payloadDensityState struct {
@@ -291,7 +284,16 @@ func (s *payloadDensityState) info(window []payloadClass) (payloadDensityInfo, b
 	return payloadDensityInfo{
 		suspiciousCount: s.suspiciousCount,
 		classes:         collectPayloadClasses(window),
+		classCount:      payloadClassCount(window),
 	}, true
+}
+
+func (i payloadDensityInfo) classSlice() []payloadClass {
+	return i.classes[:i.classCount]
+}
+
+func (w payloadDensityWindowFinding) classSlice() []payloadClass {
+	return w.classes[:w.classCount]
 }
 
 func (s *payloadDensityState) slide(outgoing, previousTail, incoming payloadClass) {
@@ -330,18 +332,93 @@ func (s *payloadDensityState) addIncoming(previousTail, class payloadClass) {
 	s.segments = append(s.segments, 1)
 }
 
-func collectPayloadClasses(window []payloadClass) []payloadClass {
-	classes := make([]payloadClass, 0, 4)
-	classSet := make(map[payloadClass]bool, 4)
+func collectPayloadClasses(window []payloadClass) [4]payloadClass {
+	var classes [4]payloadClass
+	count := 0
+	var seenInvisible bool
+	var seenPrivateUse bool
+	var seenBidi bool
+	var seenDirectional bool
 	for _, class := range window {
-		if class == payloadClassNone || classSet[class] {
+		switch class {
+		case payloadClassInvisible:
+			if seenInvisible {
+				continue
+			}
+			seenInvisible = true
+		case payloadClassPrivateUse:
+			if seenPrivateUse {
+				continue
+			}
+			seenPrivateUse = true
+		case payloadClass("bidi"):
+			if seenBidi {
+				continue
+			}
+			seenBidi = true
+		case payloadClass("directional-control"):
+			if seenDirectional {
+				continue
+			}
+			seenDirectional = true
+		default:
 			continue
 		}
-		classSet[class] = true
-		classes = append(classes, class)
+
+		classes[count] = class
+		count++
 	}
 
 	return classes
+}
+
+func payloadClassCount(window []payloadClass) int {
+	count := 0
+	var seenInvisible bool
+	var seenPrivateUse bool
+	var seenBidi bool
+	var seenDirectional bool
+	for _, class := range window {
+		switch class {
+		case payloadClassInvisible:
+			if seenInvisible {
+				continue
+			}
+			seenInvisible = true
+		case payloadClassPrivateUse:
+			if seenPrivateUse {
+				continue
+			}
+			seenPrivateUse = true
+		case payloadClass("bidi"):
+			if seenBidi {
+				continue
+			}
+			seenBidi = true
+		case payloadClass("directional-control"):
+			if seenDirectional {
+				continue
+			}
+			seenDirectional = true
+		default:
+			continue
+		}
+
+		count++
+	}
+
+	return count
+}
+
+func addPayloadClass(classes *[4]payloadClass, count *int, class payloadClass) {
+	for index := 0; index < *count; index++ {
+		if classes[index] == class {
+			return
+		}
+	}
+
+	classes[*count] = class
+	*count = *count + 1
 }
 
 func joinPayloadClasses(classes []payloadClass) string {
