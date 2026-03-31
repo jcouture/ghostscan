@@ -39,10 +39,11 @@ func TestWriteHumanCleanDefaultOutput(t *testing.T) {
 		Version: "dev",
 		Color:   false,
 		Runtime: RuntimeStats{
-			FilesScanned:    12,
-			BytesScanned:    1536,
-			ScanDuration:    842 * time.Millisecond,
-			SkippedByReason: []Count{{Label: "binary_nul", Value: 2}, {Label: "excluded", Value: 4}, {Label: "too_large", Value: 1}},
+			FilesScanned:      12,
+			DirectoriesPruned: 4,
+			BytesScanned:      1536,
+			ScanDuration:      842 * time.Millisecond,
+			SkippedByReason:   []Count{{Label: "binary_nul", Value: 2}, {Label: "too_large", Value: 1}},
 		},
 	})
 	if err != nil {
@@ -54,7 +55,8 @@ func TestWriteHumanCleanDefaultOutput(t *testing.T) {
 		"########",
 		"ghostscan dev\n\n",
 		"INF scanned 12 files (1.5 KB) in 842ms",
-		"INF skipped 7 files (binary: 2, excluded: 4, oversize: 1)",
+		"INF skipped 3 files (binary: 2, oversize: 1)",
+		"INF pruned 4 excluded directories",
 		"INF OK no suspicious unicode patterns found",
 	} {
 		if !strings.Contains(output, needle) {
@@ -178,10 +180,10 @@ func TestWriteHumanVerboseOutputIncludesStructuredFields(t *testing.T) {
 		Color:   false,
 		Verbose: true,
 		Runtime: RuntimeStats{
-			FilesScanned:    2,
-			BytesScanned:    200,
-			ScanDuration:    10 * time.Millisecond,
-			SkippedByReason: []Count{{Label: "excluded", Value: 5}},
+			FilesScanned:      2,
+			DirectoriesPruned: 5,
+			BytesScanned:      200,
+			ScanDuration:      10 * time.Millisecond,
 		},
 	})
 	if err != nil {
@@ -203,7 +205,8 @@ func TestWriteHumanVerboseOutputIncludesStructuredFields(t *testing.T) {
 		"Category:    invisible unicode",
 		"Context:\n  const payload = \"<U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200D ZERO WIDTH JOINER>...\"",
 		"INF scanned 2 files (200 B) in 10ms",
-		"INF skipped 5 files (excluded: 5)",
+		"INF skipped 0 files (none)",
+		"INF pruned 5 excluded directories",
 	} {
 		if !strings.Contains(output, needle) {
 			t.Fatalf("verbose output = %q, want substring %q", output, needle)

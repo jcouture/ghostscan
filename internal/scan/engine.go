@@ -40,11 +40,19 @@ func NewEngine() *Engine {
 }
 
 func (e *Engine) ScanRaw(ctx context.Context, path string) (*Context, error) {
+	return e.scanRaw(ctx, path, true)
+}
+
+func (e *Engine) ScanTrustedTextRaw(ctx context.Context, path string) (*Context, error) {
+	return e.scanRaw(ctx, path, false)
+}
+
+func (e *Engine) scanRaw(ctx context.Context, path string, checkBinary bool) (*Context, error) {
 	if e == nil {
 		return nil, fmt.Errorf("scan engine is nil")
 	}
 
-	fileContext, err := scanFile(ctx, path)
+	fileContext, err := scanFileWithBinaryCheck(ctx, path, checkBinary)
 	if err != nil {
 		return nil, fmt.Errorf("scan file %q: %w", path, err)
 	}
@@ -61,7 +69,15 @@ func (e *Engine) ScanFile(ctx context.Context, path string) ([]finding.Finding, 
 }
 
 func (e *Engine) ScanFileDetailed(ctx context.Context, path string) (FileResult, error) {
-	fileContext, err := e.ScanRaw(ctx, path)
+	return e.scanFileDetailed(ctx, path, true)
+}
+
+func (e *Engine) ScanTrustedTextFileDetailed(ctx context.Context, path string) (FileResult, error) {
+	return e.scanFileDetailed(ctx, path, false)
+}
+
+func (e *Engine) scanFileDetailed(ctx context.Context, path string, checkBinary bool) (FileResult, error) {
+	fileContext, err := e.scanRaw(ctx, path, checkBinary)
 	if err != nil {
 		return FileResult{}, err
 	}
@@ -69,21 +85,8 @@ func (e *Engine) ScanFileDetailed(ctx context.Context, path string) (FileResult,
 	file := detector.File{
 		Path:         fileContext.Path,
 		Text:         fileContext.Text,
-		Observations: toDetectorObservations(fileContext.Observations),
-		Prepass: detector.Prepass{
-			Ready:                fileContext.Prepass.Ready,
-			HasInvisible:         fileContext.Prepass.HasInvisible,
-			HasPrivateUse:        fileContext.Prepass.HasPrivateUse,
-			HasBidi:              fileContext.Prepass.HasBidi,
-			HasDirectional:       fileContext.Prepass.HasDirectional,
-			InvisibleCount:       fileContext.Prepass.InvisibleCount,
-			PrivateUseCount:      fileContext.Prepass.PrivateUseCount,
-			BidiCount:            fileContext.Prepass.BidiCount,
-			DirectionalCount:     fileContext.Prepass.DirectionalCount,
-			LongestInvisibleRun:  fileContext.Prepass.LongestInvisibleRun,
-			LongestPrivateUseRun: fileContext.Prepass.LongestPrivateUseRun,
-			DecoderMarkers:       toDetectorMarkers(fileContext.Prepass.DecoderMarkers),
-		},
+		Observations: fileContext.Observations,
+		Prepass:      fileContext.Prepass,
 	}
 
 	findings := make([]finding.Finding, 0, len(fileContext.Observations))
@@ -102,34 +105,4 @@ func (e *Engine) ScanFileDetailed(ctx context.Context, path string) (FileResult,
 		Findings: findings,
 		Bytes:    int64(len(fileContext.Content)),
 	}, nil
-}
-
-func toDetectorObservations(observations []Observation) []detector.Observation {
-	items := make([]detector.Observation, 0, len(observations))
-	for _, observation := range observations {
-		items = append(items, detector.Observation{
-			Rune:       observation.Rune,
-			ByteOffset: observation.ByteOffset,
-			Line:       observation.Line,
-			Column:     observation.Column,
-			Width:      observation.Width,
-		})
-	}
-	return items
-}
-
-func toDetectorMarkers(markers []Marker) []detector.DecoderMarker {
-	items := make([]detector.DecoderMarker, 0, len(markers))
-	for _, marker := range markers {
-		items = append(items, detector.DecoderMarker{
-			Kind:     marker.Kind,
-			Marker:   marker.Marker,
-			Message:  marker.Message,
-			Line:     marker.Line,
-			Column:   marker.Column,
-			Offset:   marker.Offset,
-			Evidence: marker.Evidence,
-		})
-	}
-	return items
 }

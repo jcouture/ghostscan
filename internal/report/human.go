@@ -65,6 +65,7 @@ type RuntimeStats struct {
 	ScanDuration          time.Duration
 	FilesDiscovered       int
 	FilesScanned          int
+	DirectoriesPruned     int
 	BytesScanned          int64
 	RecoverableFileErrors int
 	SkippedByReason       []Count
@@ -77,9 +78,11 @@ type Count struct {
 }
 
 type HumanReporter struct {
-	writer  reportWriter
-	palette palette
-	color   bool
+	writer    reportWriter
+	palette   palette
+	color     bool
+	logBuffer bytes.Buffer
+	logger    zerolog.Logger
 }
 
 type reportModel struct {
@@ -118,11 +121,14 @@ type renderedFinding struct {
 }
 
 func NewHumanReporter(w io.Writer, opts Options) *HumanReporter {
-	return &HumanReporter{
+	reporter := &HumanReporter{
 		writer:  newReportWriter(w),
 		palette: newPalette(opts.Color),
 		color:   opts.Color,
 	}
+
+	reporter.logger = zerolog.New(newConsoleWriter(&reporter.logBuffer, opts.Color)).With().Timestamp().Logger()
+	return reporter
 }
 
 func WriteHuman(w io.Writer, findings []finding.Finding, opts Options) error {
@@ -130,7 +136,10 @@ func WriteHuman(w io.Writer, findings []finding.Finding, opts Options) error {
 }
 
 func (r *HumanReporter) Write(findings []finding.Finding, opts Options) error {
-	model := buildReport(findings, opts)
+	model := buildSummaryReport(findings, opts)
+	if opts.Verbose {
+		model = buildReport(findings, opts)
+	}
 
 	if err := r.writeHeader(model.version, opts.Silent); err != nil {
 		return fmt.Errorf("write report header: %w", err)
@@ -159,6 +168,15 @@ func (r *HumanReporter) Write(findings []finding.Finding, opts Options) error {
 	return nil
 }
 
+func buildSummaryReport(findings []finding.Finding, opts Options) reportModel {
+	return reportModel{
+		version: versionLabel(opts.Version),
+		runtime: opts.Runtime,
+		summary: buildSummaryFromCount(len(findings), opts.Runtime),
+		verbose: opts.Verbose,
+	}
+}
+
 func buildReport(findings []finding.Finding, opts Options) reportModel {
 	rendered := buildRenderedFindings(findings)
 	files := groupRenderedFindings(rendered)
@@ -180,47 +198,62 @@ func versionLabel(version string) string {
 }
 
 func buildSummary(findings []renderedFinding, runtime RuntimeStats) summary {
+	return buildSummaryFromCount(len(findings), runtime)
+}
+
+func buildSummaryFromCount(totalFindings int, runtime RuntimeStats) summary {
 	skippedTotal := 0
 	for _, item := range runtime.SkippedByReason {
 		skippedTotal += item.Value
 	}
 
 	return summary{
-		totalFindings: len(findings),
+		totalFindings: totalFindings,
 		skippedTotal:  skippedTotal,
 	}
 }
 
 func buildRenderedFindings(findings []finding.Finding) []renderedFinding {
-	grouped := make(map[string][]finding.Finding)
-	for _, item := range findings {
-		grouped[item.Path] = append(grouped[item.Path], item)
+	if len(findings) == 0 {
+		return nil
 	}
 
-	paths := make([]string, 0, len(grouped))
-	for path := range grouped {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
+	sorted := append([]finding.Finding(nil), findings...)
+	finding.Sort(sorted)
 
 	rendered := make([]renderedFinding, 0, len(findings))
-	for _, path := range paths {
-		rendered = append(rendered, buildFileRenderedFindings(grouped[path])...)
+	start := 0
+	for start < len(sorted) {
+		end := start + 1
+		for end < len(sorted) && sorted[end].Path == sorted[start].Path {
+			end++
+		}
+		rendered = append(rendered, buildFileRenderedFindings(sorted[start:end])...)
+		start = end
 	}
 	return rendered
 }
 
 func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
-	correlations := findingsByRule(findings, "unicode/correlation")
-	payloads := findingsByRule(findings, "unicode/payload")
-	decoders := findingsByRule(findings, "unicode/decoder")
-	invisibles := findingsByRule(findings, "unicode/invisible")
-	privateUse := findingsByRule(findings, "unicode/private-use")
+	correlations, payloads, decoders, invisibles, privateUse := partitionFindings(findings)
 
 	usedPayloads := make([]bool, len(payloads))
 	usedDecoders := make([]bool, len(decoders))
 	suppressedInvisible := make([]bool, len(invisibles))
 	suppressedPrivateUse := make([]bool, len(privateUse))
+	payloadIndexByLocation := make(map[findingLocation]int, len(payloads))
+	decoderIndexByFinding := make(map[finding.Finding]int, len(decoders))
+
+	for index, payload := range payloads {
+		payloadIndexByLocation[findingLocation{
+			path:   payload.Path,
+			line:   payload.Line,
+			column: payload.Column,
+		}] = index
+	}
+	for index, decoder := range decoders {
+		decoderIndexByFinding[decoder] = index
+	}
 
 	for _, payload := range payloads {
 		for index, item := range invisibles {
@@ -237,13 +270,17 @@ func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
 
 	rendered := make([]renderedFinding, 0, len(findings))
 	for _, correlation := range correlations {
-		payloadIndex := matchingPayloadIndex(correlation, payloads)
-		if payloadIndex >= 0 {
+		payloadIndex, ok := payloadIndexByLocation[findingLocation{
+			path:   correlation.Path,
+			line:   correlation.Line,
+			column: correlation.Column,
+		}]
+		if ok {
 			usedPayloads[payloadIndex] = true
 		}
 
 		decoderIndex := nearestDecoderIndex(correlation, decoders)
-		if decoderIndex >= 0 {
+		if decoderIndex >= 0 && decoderIndex < len(usedDecoders) {
 			usedDecoders[decoderIndex] = true
 		}
 
@@ -276,8 +313,8 @@ func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
 		case "unicode/correlation", "unicode/payload", "unicode/invisible", "unicode/private-use":
 			continue
 		case "unicode/decoder":
-			index := indexOfFinding(decoders, item)
-			if index >= 0 && usedDecoders[index] {
+			index, ok := decoderIndexByFinding[item]
+			if ok && usedDecoders[index] {
 				continue
 			}
 		}
@@ -288,23 +325,35 @@ func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
 	return rendered
 }
 
-func findingsByRule(findings []finding.Finding, ruleID string) []finding.Finding {
-	filtered := make([]finding.Finding, 0)
-	for _, item := range findings {
-		if item.RuleID == ruleID {
-			filtered = append(filtered, item)
-		}
-	}
-	return filtered
+type findingLocation struct {
+	path   string
+	line   int
+	column int
 }
 
-func matchingPayloadIndex(correlation finding.Finding, payloads []finding.Finding) int {
-	for index, payload := range payloads {
-		if payload.Path == correlation.Path && payload.Line == correlation.Line && payload.Column == correlation.Column {
-			return index
+func partitionFindings(findings []finding.Finding) ([]finding.Finding, []finding.Finding, []finding.Finding, []finding.Finding, []finding.Finding) {
+	correlations := make([]finding.Finding, 0)
+	payloads := make([]finding.Finding, 0)
+	decoders := make([]finding.Finding, 0)
+	invisibles := make([]finding.Finding, 0)
+	privateUse := make([]finding.Finding, 0)
+
+	for _, item := range findings {
+		switch item.RuleID {
+		case "unicode/correlation":
+			correlations = append(correlations, item)
+		case "unicode/payload":
+			payloads = append(payloads, item)
+		case "unicode/decoder":
+			decoders = append(decoders, item)
+		case "unicode/invisible":
+			invisibles = append(invisibles, item)
+		case "unicode/private-use":
+			privateUse = append(privateUse, item)
 		}
 	}
-	return -1
+
+	return correlations, payloads, decoders, invisibles, privateUse
 }
 
 func nearestDecoderIndex(reference finding.Finding, decoders []finding.Finding) int {
@@ -326,15 +375,6 @@ func nearestDecoderIndex(reference finding.Finding, decoders []finding.Finding) 
 	}
 
 	return bestIndex
-}
-
-func indexOfFinding(findings []finding.Finding, target finding.Finding) int {
-	for index, item := range findings {
-		if item == target {
-			return index
-		}
-	}
-	return -1
 }
 
 func overlaps(left, right finding.Finding) bool {
@@ -603,6 +643,21 @@ func (r *HumanReporter) writeRuntimeSummary(model reportModel) error {
 	); err != nil {
 		return err
 	}
+	if model.runtime.DirectoriesPruned > 0 {
+		label := "directories"
+		if model.runtime.DirectoriesPruned == 1 {
+			label = "directory"
+		}
+		if err := r.writeInfo(
+			fmt.Sprintf(
+				"pruned %s excluded %s",
+				formatInt(model.runtime.DirectoriesPruned),
+				label,
+			),
+		); err != nil {
+			return err
+		}
+	}
 	if model.runtime.RecoverableFileErrors > 0 {
 		if err := r.writeWarn(
 			fmt.Sprintf(
@@ -639,10 +694,9 @@ func (r *HumanReporter) writeWarn(message string) error {
 }
 
 func (r *HumanReporter) writeLog(emit func(logger zerolog.Logger)) error {
-	var buffer bytes.Buffer
-	logger := zerolog.New(newConsoleWriter(&buffer, r.color)).With().Timestamp().Logger()
-	emit(logger)
-	_, err := io.Copy(r.writer.w, &buffer)
+	r.logBuffer.Reset()
+	emit(r.logger)
+	_, err := io.Copy(r.writer.w, &r.logBuffer)
 	return err
 }
 

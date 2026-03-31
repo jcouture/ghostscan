@@ -22,6 +22,7 @@ package detector
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jcouture/ghostscan/internal/finding"
@@ -162,43 +163,41 @@ func detectPayloadDensity(file File) []finding.Finding {
 		return nil
 	}
 
+	classes := make([]payloadClass, len(file.Observations))
+	for index, observation := range file.Observations {
+		classes[index] = classifyPayloadDensityRune(observation.Rune)
+	}
+
+	state := newPayloadDensityState(classes[:payloadDensityWindow])
 	windows := make([]payloadDensityWindowFinding, 0)
 	for start := 0; start+payloadDensityWindow <= len(file.Observations); start++ {
 		end := start + payloadDensityWindow
-		window := file.Observations[start:end]
-
-		info, ok := analyzePayloadDensityWindow(window)
+		info, ok := state.info(classes[start:end])
 		if !ok {
-			continue
-		}
-
-		if len(windows) > 0 && start <= windows[len(windows)-1].end {
-			last := &windows[len(windows)-1]
-			last.end = end
-			if info.suspiciousCount > last.suspiciousCount {
-				last.suspiciousCount = info.suspiciousCount
-			}
-			for _, class := range info.classes {
-				if !last.classSet[class] {
-					last.classSet[class] = true
-					last.classes = append(last.classes, class)
+		} else {
+			if len(windows) > 0 && start <= windows[len(windows)-1].end {
+				last := &windows[len(windows)-1]
+				last.end = end
+				if info.suspiciousCount > last.suspiciousCount {
+					last.suspiciousCount = info.suspiciousCount
 				}
+				for _, class := range info.classSlice() {
+					addPayloadClass(&last.classes, &last.classCount, class)
+				}
+			} else {
+				windows = append(windows, payloadDensityWindowFinding{
+					start:           start,
+					end:             end,
+					suspiciousCount: info.suspiciousCount,
+					classes:         info.classes,
+					classCount:      info.classCount,
+				})
 			}
-			continue
 		}
 
-		classSet := make(map[payloadClass]bool, len(info.classes))
-		for _, class := range info.classes {
-			classSet[class] = true
+		if end < len(classes) {
+			state.slide(classes[start], classes[end-1], classes[end])
 		}
-
-		windows = append(windows, payloadDensityWindowFinding{
-			start:           start,
-			end:             end,
-			suspiciousCount: info.suspiciousCount,
-			classes:         append([]payloadClass(nil), info.classes...),
-			classSet:        classSet,
-		})
 	}
 
 	findings := make([]finding.Finding, 0, len(windows))
@@ -213,7 +212,7 @@ func detectPayloadDensity(file File) []finding.Finding {
 			EndLine:   end.Line,
 			EndColumn: end.Column,
 			RuleID:    PayloadRuleID,
-			Message:   fmt.Sprintf("Suspicious encoded payload density detected: %d suspicious Unicode characters in a %d-character window (%s)", window.suspiciousCount, payloadDensityWindow, joinPayloadClasses(window.classes)),
+			Message:   fmt.Sprintf("Suspicious encoded payload density detected: %d suspicious Unicode characters in a %d-character window (%s)", window.suspiciousCount, payloadDensityWindow, joinPayloadClasses(window.classSlice())),
 			Evidence:  renderPayloadDensityWindow(observations),
 		})
 	}
@@ -225,64 +224,201 @@ type payloadDensityWindowFinding struct {
 	start           int
 	end             int
 	suspiciousCount int
-	classes         []payloadClass
-	classSet        map[payloadClass]bool
+	classes         [4]payloadClass
+	classCount      int
 }
 
 type payloadDensityInfo struct {
 	suspiciousCount int
-	classes         []payloadClass
+	classes         [4]payloadClass
+	classCount      int
 }
 
-func analyzePayloadDensityWindow(window []Observation) (payloadDensityInfo, bool) {
-	suspiciousCount := 0
-	classes := make([]payloadClass, 0, 4)
-	classSet := make(map[payloadClass]bool)
-	segments := 0
-	inSegment := false
-	longestSegment := 0
-	currentSegment := 0
+type payloadDensityState struct {
+	suspiciousCount int
+	segments        []int
+}
 
-	for _, observation := range window {
-		class := classifyPayloadDensityRune(observation.Rune)
+func newPayloadDensityState(window []payloadClass) payloadDensityState {
+	state := payloadDensityState{
+		segments: make([]int, 0, payloadDensityWindow/2),
+	}
+
+	currentSegment := 0
+	for _, class := range window {
 		if class == payloadClassNone {
-			inSegment = false
-			currentSegment = 0
+			if currentSegment > 0 {
+				state.segments = append(state.segments, currentSegment)
+				currentSegment = 0
+			}
 			continue
 		}
 
-		suspiciousCount++
+		state.suspiciousCount++
 		currentSegment++
-		if currentSegment > longestSegment {
-			longestSegment = currentSegment
-		}
-		if !inSegment {
-			segments++
-			inSegment = true
-		}
-		if !classSet[class] {
-			classSet[class] = true
-			classes = append(classes, class)
-		}
 	}
 
-	if suspiciousCount < payloadDensityCount {
+	if currentSegment > 0 {
+		state.segments = append(state.segments, currentSegment)
+	}
+
+	return state
+}
+
+func (s *payloadDensityState) info(window []payloadClass) (payloadDensityInfo, bool) {
+	if s.suspiciousCount < payloadDensityCount {
 		return payloadDensityInfo{}, false
 	}
-	if segments < 2 {
+	if len(s.segments) < 2 {
 		return payloadDensityInfo{}, false
 	}
+
+	longestSegment := slices.Max(s.segments)
 	if longestSegment > payloadRunThreshold {
 		return payloadDensityInfo{}, false
 	}
-	if longestSegment*2 > suspiciousCount {
+	if longestSegment*2 > s.suspiciousCount {
 		return payloadDensityInfo{}, false
 	}
 
 	return payloadDensityInfo{
-		suspiciousCount: suspiciousCount,
-		classes:         classes,
+		suspiciousCount: s.suspiciousCount,
+		classes:         collectPayloadClasses(window),
+		classCount:      payloadClassCount(window),
 	}, true
+}
+
+func (i payloadDensityInfo) classSlice() []payloadClass {
+	return i.classes[:i.classCount]
+}
+
+func (w payloadDensityWindowFinding) classSlice() []payloadClass {
+	return w.classes[:w.classCount]
+}
+
+func (s *payloadDensityState) slide(outgoing, previousTail, incoming payloadClass) {
+	s.removeOutgoing(outgoing)
+	s.addIncoming(previousTail, incoming)
+}
+
+func (s *payloadDensityState) removeOutgoing(class payloadClass) {
+	if class == payloadClassNone {
+		return
+	}
+
+	s.suspiciousCount--
+	s.segments[0]--
+	if s.segments[0] == 0 {
+		s.segments = s.segments[1:]
+	}
+}
+
+func (s *payloadDensityState) addIncoming(previousTail, class payloadClass) {
+	if class == payloadClassNone {
+		return
+	}
+
+	s.suspiciousCount++
+	if len(s.segments) == 0 {
+		s.segments = append(s.segments, 1)
+		return
+	}
+
+	if previousTail != payloadClassNone {
+		s.segments[len(s.segments)-1]++
+		return
+	}
+
+	s.segments = append(s.segments, 1)
+}
+
+func collectPayloadClasses(window []payloadClass) [4]payloadClass {
+	var classes [4]payloadClass
+	count := 0
+	var seenInvisible bool
+	var seenPrivateUse bool
+	var seenBidi bool
+	var seenDirectional bool
+	for _, class := range window {
+		switch class {
+		case payloadClassInvisible:
+			if seenInvisible {
+				continue
+			}
+			seenInvisible = true
+		case payloadClassPrivateUse:
+			if seenPrivateUse {
+				continue
+			}
+			seenPrivateUse = true
+		case payloadClass("bidi"):
+			if seenBidi {
+				continue
+			}
+			seenBidi = true
+		case payloadClass("directional-control"):
+			if seenDirectional {
+				continue
+			}
+			seenDirectional = true
+		default:
+			continue
+		}
+
+		classes[count] = class
+		count++
+	}
+
+	return classes
+}
+
+func payloadClassCount(window []payloadClass) int {
+	count := 0
+	var seenInvisible bool
+	var seenPrivateUse bool
+	var seenBidi bool
+	var seenDirectional bool
+	for _, class := range window {
+		switch class {
+		case payloadClassInvisible:
+			if seenInvisible {
+				continue
+			}
+			seenInvisible = true
+		case payloadClassPrivateUse:
+			if seenPrivateUse {
+				continue
+			}
+			seenPrivateUse = true
+		case payloadClass("bidi"):
+			if seenBidi {
+				continue
+			}
+			seenBidi = true
+		case payloadClass("directional-control"):
+			if seenDirectional {
+				continue
+			}
+			seenDirectional = true
+		default:
+			continue
+		}
+
+		count++
+	}
+
+	return count
+}
+
+func addPayloadClass(classes *[4]payloadClass, count *int, class payloadClass) {
+	for index := 0; index < *count; index++ {
+		if classes[index] == class {
+			return
+		}
+	}
+
+	classes[*count] = class
+	*count = *count + 1
 }
 
 func joinPayloadClasses(classes []payloadClass) string {

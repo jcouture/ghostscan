@@ -32,6 +32,14 @@ import (
 var ErrBinaryContent = errors.New("binary file content contains NUL byte")
 
 func scanFile(ctx context.Context, path string) (*Context, error) {
+	return scanFileWithBinaryCheck(ctx, path, true)
+}
+
+func scanTrustedTextFile(ctx context.Context, path string) (*Context, error) {
+	return scanFileWithBinaryCheck(ctx, path, false)
+}
+
+func scanFileWithBinaryCheck(ctx context.Context, path string, checkBinary bool) (*Context, error) {
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("context canceled before reading file: %w", ctx.Err())
@@ -42,7 +50,7 @@ func scanFile(ctx context.Context, path string) (*Context, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read file %q: %w", path, err)
 	}
-	if bytes.IndexByte(content, 0) >= 0 {
+	if checkBinary && bytes.IndexByte(content, 0) >= 0 {
 		return nil, ErrBinaryContent
 	}
 
@@ -50,6 +58,8 @@ func scanFile(ctx context.Context, path string) (*Context, error) {
 	text := string(content)
 	observations := make([]Observation, 0, len(text))
 	invalidUTF8 := false
+	line := 1
+	column := 1
 
 	for offset := 0; offset < len(content); {
 		if offset%1024 == 0 {
@@ -65,7 +75,6 @@ func scanFile(ctx context.Context, path string) (*Context, error) {
 			invalidUTF8 = true
 		}
 
-		line, column := positionForOffset(content, lineStarts, offset)
 		observations = append(observations, Observation{
 			Rune:       r,
 			ByteOffset: offset,
@@ -76,6 +85,12 @@ func scanFile(ctx context.Context, path string) (*Context, error) {
 
 		// Invalid UTF-8 is represented explicitly as RuneError with width 1 so
 		// the original bad byte still occupies one scan position.
+		if r == '\n' {
+			line++
+			column = 1
+		} else {
+			column++
+		}
 		offset += width
 	}
 
