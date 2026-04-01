@@ -39,8 +39,15 @@ type DiscoveryStats struct {
 	Skipped           SkipStats
 }
 
+type DiscoverOptions struct {
+	MaxFileSize int64
+	Excluder    *Excluder
+	OnExclude   func(path, pattern string)
+}
+
 // Discover returns clean absolute paths for regular-file scan candidates.
-func Discover(root string, maxFileSize int64) (Discovery, error) {
+func Discover(root string, opts DiscoverOptions) (Discovery, error) {
+	maxFileSize := opts.MaxFileSize
 	if maxFileSize <= 0 {
 		maxFileSize = DefaultMaxFileSize
 	}
@@ -61,8 +68,27 @@ func Discover(root string, maxFileSize int64) (Discovery, error) {
 	}
 
 	stats := DiscoveryStats{Skipped: newSkipStats()}
+	excluder := opts.Excluder
+	if excluder == nil {
+		excluder, err = NewExcluder(nil, true)
+		if err != nil {
+			return Discovery{}, err
+		}
+	}
+
 	if isRegularFileCandidate(info.Mode()) {
 		stats.FilesDiscovered = 1
+		relativePath, err := normalizeRelativePath(absoluteRoot, absoluteRoot, true)
+		if err != nil {
+			return Discovery{}, err
+		}
+		if matchedPattern, excluded := excluder.MatchPath(relativePath); excluded {
+			stats.Skipped.add(EligibilityReasonExcluded)
+			if opts.OnExclude != nil {
+				opts.OnExclude(relativePath, matchedPattern)
+			}
+			return Discovery{Stats: stats}, nil
+		}
 		eligibility, err := CheckFile(absoluteRoot, maxFileSize)
 		if err != nil {
 			return Discovery{}, err
@@ -85,11 +111,12 @@ func Discover(root string, maxFileSize int64) (Discovery, error) {
 		}
 
 		if path == absoluteRoot {
-			if isExcludedDirectory(entry.Name()) {
-				stats.DirectoriesPruned++
-				return filepath.SkipDir
-			}
 			return nil
+		}
+
+		relativePath, err := normalizeRelativePath(absoluteRoot, path, false)
+		if err != nil {
+			return err
 		}
 
 		if isSymlink(entry.Type()) {
@@ -97,11 +124,22 @@ func Discover(root string, maxFileSize int64) (Discovery, error) {
 			return nil
 		}
 
-		if entry.IsDir() {
-			if isExcludedDirectory(entry.Name()) {
+		if matchedPattern, excluded := excluder.MatchPath(relativePath); excluded {
+			if entry.IsDir() {
 				stats.DirectoriesPruned++
+				if opts.OnExclude != nil {
+					opts.OnExclude(relativePath, matchedPattern)
+				}
 				return filepath.SkipDir
 			}
+			stats.Skipped.add(EligibilityReasonExcluded)
+			if opts.OnExclude != nil {
+				opts.OnExclude(relativePath, matchedPattern)
+			}
+			return nil
+		}
+
+		if entry.IsDir() {
 			return nil
 		}
 

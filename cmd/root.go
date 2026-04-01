@@ -61,11 +61,15 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var verbose bool
 	var silent bool
 	var maxFileSize int64
+	var excludes []string
+	var noDefaultExcludes bool
 	flags.BoolVarP(&noColor, "no-color", "n", false, "disable color")
 	flags.BoolVarP(&version, "version", "v", false, "print version")
 	flags.BoolVar(&verbose, "verbose", false, "print detailed structured finding blocks")
 	flags.BoolVar(&silent, "silent", false, "suppress the startup banner")
 	flags.Int64Var(&maxFileSize, "max-file-size", 0, "skip files larger than this many bytes")
+	flags.StringArrayVar(&excludes, "exclude", nil, "exclude files or directories matching this glob; repeatable")
+	flags.BoolVar(&noDefaultExcludes, "no-default-excludes", false, "disable built-in exclude globs")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, pflag.ErrHelp) {
@@ -95,13 +99,15 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	result, err := app.Run(ctx, app.Options{
-		Path:        path,
-		Stdout:      stdout,
-		Color:       !noColor,
-		Verbose:     verbose,
-		Silent:      silent,
-		MaxFileSize: maxFileSize,
-		Version:     Version,
+		Path:               path,
+		Stdout:             stdout,
+		Color:              !noColor,
+		Verbose:            verbose,
+		Silent:             silent,
+		MaxFileSize:        maxFileSize,
+		Excludes:           excludes,
+		UseDefaultExcludes: !noDefaultExcludes,
+		Version:            Version,
 	})
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)

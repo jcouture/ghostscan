@@ -40,14 +40,15 @@ func TestDiscoverDirectoryRoot(t *testing.T) {
 	createFile(t, filepath.Join(root, ".hidden", "visible.txt"))
 	createFile(t, filepath.Join(root, "nested", "deeper", "file.go"))
 
-	for _, excluded := range []string{".git", "node_modules", "vendor", "dist", "build", "target", "out", "coverage"} {
-		createFile(t, filepath.Join(root, excluded, "ignored.txt"))
+	for _, excluded := range DefaultExcludePatterns() {
+		dir := strings.TrimSuffix(excluded, "/**")
+		createFile(t, filepath.Join(root, dir, "ignored.txt"))
 	}
 
 	createSymlink(t, filepath.Join(root, "a-first.txt"), filepath.Join(root, "linked-file.txt"))
 	createSymlink(t, filepath.Join(root, "nested"), filepath.Join(root, "linked-dir"))
 
-	discovery, err := Discover(root, DefaultMaxFileSize)
+	discovery, err := Discover(root, DiscoverOptions{MaxFileSize: DefaultMaxFileSize})
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -78,7 +79,7 @@ func TestDiscoverSingleFileRoot(t *testing.T) {
 	filePath := filepath.Join(root, "single.txt")
 	createFile(t, filePath)
 
-	discovery, err := Discover(filePath, DefaultMaxFileSize)
+	discovery, err := Discover(filePath, DiscoverOptions{MaxFileSize: DefaultMaxFileSize})
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -99,7 +100,7 @@ func TestDiscoverSkipsIneligibleFiles(t *testing.T) {
 	copyFixtureFile(t, testdataPath("oversize", "too_large.txt"), filepath.Join(root, "too_large.txt"))
 	writeRepeatingFile(t, filepath.Join(root, "boundary.txt"), "a", DefaultMaxFileSize)
 
-	discovery, err := Discover(root, DefaultMaxFileSize)
+	discovery, err := Discover(root, DiscoverOptions{MaxFileSize: DefaultMaxFileSize})
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -122,7 +123,7 @@ func TestDiscoverRespectsCustomMaxFileSize(t *testing.T) {
 	writeRepeatingFile(t, filepath.Join(root, "small.txt"), "a", 32)
 	writeRepeatingFile(t, filepath.Join(root, "large.txt"), "a", 64)
 
-	discovery, err := Discover(root, 32)
+	discovery, err := Discover(root, DiscoverOptions{MaxFileSize: 32})
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -142,7 +143,7 @@ func TestDiscoverSingleFileRootSkipsIneligibleFile(t *testing.T) {
 	root := t.TempDir()
 	path := copyFixtureFile(t, testdataPath("binary", "contains_nul.bin"), filepath.Join(root, "contains_nul.bin"))
 
-	discovery, err := Discover(path, DefaultMaxFileSize)
+	discovery, err := Discover(path, DiscoverOptions{MaxFileSize: DefaultMaxFileSize})
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
@@ -157,7 +158,7 @@ func TestDiscoverInvalidPath(t *testing.T) {
 
 	missing := filepath.Join(t.TempDir(), "missing")
 
-	_, err := Discover(missing, DefaultMaxFileSize)
+	_, err := Discover(missing, DiscoverOptions{MaxFileSize: DefaultMaxFileSize})
 	if err == nil {
 		t.Fatal("Discover() error = nil, want error")
 	}
@@ -177,13 +178,110 @@ func TestDiscoverRejectsSymlinkRoot(t *testing.T) {
 	linkPath := filepath.Join(root, "link.txt")
 	createSymlink(t, target, linkPath)
 
-	_, err := Discover(linkPath, DefaultMaxFileSize)
+	_, err := Discover(linkPath, DiscoverOptions{MaxFileSize: DefaultMaxFileSize})
 	if err == nil {
 		t.Fatal("Discover() error = nil, want error")
 	}
 
 	if !strings.Contains(err.Error(), "is a symlink") {
 		t.Fatalf("Discover() error = %q, want symlink error", err.Error())
+	}
+}
+
+func TestDiscoverPrunesExcludedDirectory(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	createFile(t, filepath.Join(root, "vendor", "nested", "ignored.txt"))
+	createFile(t, filepath.Join(root, "src", "keep.txt"))
+
+	excluder, err := NewExcluder([]string{"vendor/**"}, false)
+	if err != nil {
+		t.Fatalf("NewExcluder() error = %v", err)
+	}
+
+	discovery, err := Discover(root, DiscoverOptions{
+		MaxFileSize: DefaultMaxFileSize,
+		Excluder:    excluder,
+	})
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	want := []string{filepath.Join(root, "src", "keep.txt")}
+	if !reflect.DeepEqual(discovery.Candidates, want) {
+		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
+	}
+	if discovery.Stats.DirectoriesPruned != 1 {
+		t.Fatalf("DirectoriesPruned = %d, want 1", discovery.Stats.DirectoriesPruned)
+	}
+	if got := discovery.Stats.Skipped.ByReason[EligibilityReasonExcluded]; got != 0 {
+		t.Fatalf("excluded skipped count = %d, want 0", got)
+	}
+}
+
+func TestDiscoverSkipsExcludedFile(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	createFile(t, filepath.Join(root, "dist", "app.min.js"))
+	createFile(t, filepath.Join(root, "src", "keep.js"))
+
+	excluder, err := NewExcluder([]string{"**/*.min.js"}, false)
+	if err != nil {
+		t.Fatalf("NewExcluder() error = %v", err)
+	}
+
+	discovery, err := Discover(root, DiscoverOptions{
+		MaxFileSize: DefaultMaxFileSize,
+		Excluder:    excluder,
+	})
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	want := []string{filepath.Join(root, "src", "keep.js")}
+	if !reflect.DeepEqual(discovery.Candidates, want) {
+		t.Fatalf("Discover() = %v, want %v", discovery.Candidates, want)
+	}
+	if got := discovery.Stats.Skipped.ByReason[EligibilityReasonExcluded]; got != 1 {
+		t.Fatalf("excluded skipped count = %d, want 1", got)
+	}
+}
+
+func TestDiscoverReportsExcludedPath(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	createFile(t, filepath.Join(root, "dist", "app.min.js"))
+	createFile(t, filepath.Join(root, "vendor", "nested", "ignored.txt"))
+
+	excluder, err := NewExcluder([]string{"**/*.min.js", "vendor/**"}, false)
+	if err != nil {
+		t.Fatalf("NewExcluder() error = %v", err)
+	}
+
+	var reported []string
+	_, err = Discover(root, DiscoverOptions{
+		MaxFileSize: DefaultMaxFileSize,
+		Excluder:    excluder,
+		OnExclude: func(path, pattern string) {
+			reported = append(reported, path+"="+pattern)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Discover() error = %v", err)
+	}
+
+	if len(reported) != 2 {
+		t.Fatalf("reported excludes = %v, want excluded file and directory", reported)
+	}
+	want := []string{
+		"dist/app.min.js=**/*.min.js",
+		"vendor=vendor/**",
+	}
+	if !reflect.DeepEqual(reported, want) {
+		t.Fatalf("reported excludes = %v, want %v", reported, want)
 	}
 }
 
