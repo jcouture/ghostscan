@@ -259,37 +259,12 @@ func TestEngineScanExpandedDecoderFixtures(t *testing.T) {
 		expected []expectedFinding
 	}{
 		{
-			name:    "comment mentions are matched literally",
+			name:    "comment mentions stay internal without payload correlation",
 			fixture: fixturePath("mixed", "comment_mentions_eval.js"),
-			expected: []expectedFinding{
-				{
-					ruleID:   "unicode/decoder",
-					line:     1,
-					column:   20,
-					message:  "Suspicious decoder or dynamic execution pattern detected: eval(",
-					evidence: "eval(",
-				},
-				{
-					ruleID:   "unicode/decoder",
-					line:     2,
-					column:   20,
-					message:  "Suspicious decoder or dynamic execution pattern detected: Buffer.from(",
-					evidence: "Buffer.from(",
-				},
-			},
 		},
 		{
-			name:    "settimeout escaped string",
+			name:    "settimeout string marker stays internal without payload correlation",
 			fixture: fixturePath("mixed", "settimeout_escaped_string.js"),
-			expected: []expectedFinding{
-				{
-					ruleID:   "unicode/decoder",
-					line:     1,
-					column:   1,
-					message:  "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument",
-					evidence: `setTimeout("console.log(\"ok\")"`,
-				},
-			},
 		},
 		{
 			name:    "literal matcher ignores spaced buffer form",
@@ -323,15 +298,15 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 		wantCorrelationCount int
 	}{
 		{
-			name:                 "near payload correlates both decoders",
+			name:                 "near payload emits one payload and one correlation",
 			fixture:              fixturePath("mixed", "glassworm_buffer_eval_near.js"),
-			wantCount:            5,
+			wantCount:            3,
 			wantCorrelationCount: 1,
 		},
 		{
-			name:                 "far payload within 20 lines still correlates once",
+			name:                 "far payload leaves only primary payload signals",
 			fixture:              fixturePath("mixed", "glassworm_buffer_eval_far.js"),
-			wantCount:            4,
+			wantCount:            2,
 			wantCorrelationCount: 0,
 		},
 	}
@@ -350,15 +325,12 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 			}
 
 			payloadCount := 0
-			decoderCount := 0
 			correlationCount := 0
 
 			for _, item := range findings {
 				switch item.RuleID {
 				case "unicode/payload":
 					payloadCount++
-				case "unicode/decoder":
-					decoderCount++
 				case "unicode/correlation":
 					correlationCount++
 				}
@@ -366,9 +338,6 @@ func TestEngineScanGlasswormInspiredMixedFixtures(t *testing.T) {
 
 			if payloadCount != 1 {
 				t.Fatalf("payloadCount = %d, want 1", payloadCount)
-			}
-			if decoderCount != 2 {
-				t.Fatalf("decoderCount = %d, want 2", decoderCount)
 			}
 			if correlationCount != tt.wantCorrelationCount {
 				t.Fatalf("correlationCount = %d, want %d", correlationCount, tt.wantCorrelationCount)
@@ -422,6 +391,10 @@ func TestEngineScanPositionAndBenignFixtures(t *testing.T) {
 		{
 			name:    "decoder words without call syntax stay clean",
 			fixture: fixturePath("benign", "prose_decoder_words.txt"),
+		},
+		{
+			name:    "font asset private use stays suppressed",
+			fixture: fixturePath("assets", "font_private_use.svg"),
 		},
 	}
 

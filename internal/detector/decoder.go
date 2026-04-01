@@ -23,46 +23,19 @@ package detector
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 const (
-	DecoderRuleID     = "unicode/decoder"
 	CorrelationRuleID = "unicode/correlation"
 	correlationLines  = 20
 )
 
-type Decoder struct{}
-
-func NewDecoder() Decoder {
-	return Decoder{}
-}
-
-func (Decoder) Detect(file File) []finding.Finding {
-	if file.Prepass.Ready && len(file.Prepass.DecoderMarkers) == 0 {
-		return nil
-	}
-
-	findings := make([]finding.Finding, 0, len(file.Prepass.DecoderMarkers))
-	for _, marker := range file.Prepass.DecoderMarkers {
-		findings = append(findings, finding.Finding{
-			Path:      file.Path,
-			Line:      marker.Line,
-			Column:    marker.Column,
-			EndLine:   marker.Line,
-			EndColumn: marker.Column + len(marker.Marker) - 1,
-			RuleID:    DecoderRuleID,
-			Message:   marker.Message,
-			Evidence:  marker.Evidence,
-		})
-	}
-	return findings
-}
-
-func CorrelateFile(findings []finding.Finding) []finding.Finding {
+func CorrelateFile(file File, findings []finding.Finding) []finding.Finding {
 	payloads := findingsByRule(findings, PayloadRuleID)
-	decoders := findingsByRule(findings, DecoderRuleID)
+	decoders := file.Prepass.DecoderMarkers
 	if len(payloads) == 0 || len(decoders) == 0 {
 		return nil
 	}
@@ -81,7 +54,7 @@ func CorrelateFile(findings []finding.Finding) []finding.Finding {
 			EndLine:   payload.EndLine,
 			EndColumn: payload.EndColumn,
 			RuleID:    CorrelationRuleID,
-			Message:   fmt.Sprintf("%s within %d lines of %s", payload.Message, lineDistance(payload.Line, decoder.Line), decoder.Evidence),
+			Message:   correlationMessage(payload, decoder),
 			Evidence:  fmt.Sprintf("payload: %s | marker: %s", payload.Evidence, decoder.Evidence),
 		})
 	}
@@ -108,16 +81,13 @@ func findingsByRule(findings []finding.Finding, ruleID string) []finding.Finding
 	return filtered
 }
 
-func nearestDecoder(payload finding.Finding, decoders []finding.Finding) (finding.Finding, bool) {
+func nearestDecoder(payload finding.Finding, decoders []DecoderMarker) (DecoderMarker, bool) {
 	var (
-		best  finding.Finding
+		best  DecoderMarker
 		found bool
 	)
 
 	for _, decoder := range decoders {
-		if decoder.Path != payload.Path {
-			continue
-		}
 		distance := lineDistance(payload.Line, decoder.Line)
 		if distance > correlationLines {
 			continue
@@ -129,6 +99,28 @@ func nearestDecoder(payload finding.Finding, decoders []finding.Finding) (findin
 	}
 
 	return best, found
+}
+
+func correlationMessage(payload finding.Finding, decoder DecoderMarker) string {
+	distance := lineDistance(payload.Line, decoder.Line)
+	kind := "decode"
+	if decoder.Kind == "dynamic-exec" {
+		kind = "decode / execution"
+	}
+	return fmt.Sprintf(
+		"Hidden Unicode payload with nearby %s pattern: %s (%d line%s away)",
+		kind,
+		strings.TrimSpace(decoder.Evidence),
+		distance,
+		correlationPlural(distance),
+	)
+}
+
+func correlationPlural(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func lineDistance(left, right int) int {

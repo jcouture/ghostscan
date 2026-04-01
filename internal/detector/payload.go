@@ -53,6 +53,7 @@ func (Payload) Detect(file File) []finding.Finding {
 	}
 
 	findings := make([]finding.Finding, 0)
+	suppressPrivateUse := isLikelyFontAssetContext(file)
 
 	runStart := -1
 	runClass := payloadClassNone
@@ -68,6 +69,11 @@ func (Payload) Detect(file File) []finding.Finding {
 		}
 
 		run := file.Observations[runStart:runEnd]
+		if suppressPrivateUse && runClass == payloadClassPrivateUse {
+			runStart = -1
+			runClass = payloadClassNone
+			return
+		}
 		start := run[0]
 		end := run[len(run)-1]
 		findings = append(findings, finding.Finding{
@@ -162,6 +168,7 @@ func detectPayloadDensity(file File) []finding.Finding {
 	if len(file.Observations) < payloadDensityWindow {
 		return nil
 	}
+	suppressPrivateUse := isLikelyFontAssetContext(file)
 
 	classes := make([]payloadClass, len(file.Observations))
 	for index, observation := range file.Observations {
@@ -217,7 +224,18 @@ func detectPayloadDensity(file File) []finding.Finding {
 		})
 	}
 
-	return findings
+	if !suppressPrivateUse {
+		return findings
+	}
+
+	filtered := findings[:0]
+	for _, item := range findings {
+		if suppressPrivateUseNoise(file, payloadClassesForMessage(item.Message)) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
 }
 
 type payloadDensityWindowFinding struct {

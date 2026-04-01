@@ -37,6 +37,9 @@ func (PrivateUse) Detect(file File) []finding.Finding {
 	if file.Prepass.Ready && !file.Prepass.HasPrivateUse {
 		return nil
 	}
+	if isLikelyFontAssetContext(file) {
+		return nil
+	}
 
 	findings := make([]finding.Finding, 0)
 	for _, run := range groupObservations(file.Observations, unicodeutil.IsPrivateUse) {

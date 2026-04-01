@@ -35,8 +35,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const correlationDistanceLines = 20
-
 type Options struct {
 	Version       string
 	Color         bool
@@ -246,14 +244,12 @@ func buildRenderedFindings(findings []finding.Finding) []renderedFinding {
 }
 
 func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
-	correlations, payloads, decoders, invisibles, privateUse := partitionFindings(findings)
+	correlations, payloads, invisibles, privateUse := partitionFindings(findings)
 
 	usedPayloads := make([]bool, len(payloads))
-	usedDecoders := make([]bool, len(decoders))
 	suppressedInvisible := make([]bool, len(invisibles))
 	suppressedPrivateUse := make([]bool, len(privateUse))
 	payloadIndexByLocation := make(map[findingLocation]int, len(payloads))
-	decoderIndexByFinding := make(map[finding.Finding]int, len(decoders))
 
 	for index, payload := range payloads {
 		payloadIndexByLocation[findingLocation{
@@ -261,9 +257,6 @@ func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
 			line:   payload.Line,
 			column: payload.Column,
 		}] = index
-	}
-	for index, decoder := range decoders {
-		decoderIndexByFinding[decoder] = index
 	}
 
 	for _, payload := range payloads {
@@ -290,12 +283,7 @@ func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
 			usedPayloads[payloadIndex] = true
 		}
 
-		decoderIndex := nearestDecoderIndex(correlation, decoders)
-		if decoderIndex >= 0 && decoderIndex < len(usedDecoders) {
-			usedDecoders[decoderIndex] = true
-		}
-
-		rendered = append(rendered, newCorrelationFinding(correlation, decoders, decoderIndex))
+		rendered = append(rendered, newCorrelationFinding(correlation))
 	}
 
 	for index, item := range payloads {
@@ -323,11 +311,6 @@ func buildFileRenderedFindings(findings []finding.Finding) []renderedFinding {
 		switch item.RuleID {
 		case "unicode/correlation", "unicode/payload", "unicode/invisible", "unicode/private-use":
 			continue
-		case "unicode/decoder":
-			index, ok := decoderIndexByFinding[item]
-			if ok && usedDecoders[index] {
-				continue
-			}
 		}
 		rendered = append(rendered, newRenderedFinding(item))
 	}
@@ -342,10 +325,9 @@ type findingLocation struct {
 	column int
 }
 
-func partitionFindings(findings []finding.Finding) ([]finding.Finding, []finding.Finding, []finding.Finding, []finding.Finding, []finding.Finding) {
+func partitionFindings(findings []finding.Finding) ([]finding.Finding, []finding.Finding, []finding.Finding, []finding.Finding) {
 	correlations := make([]finding.Finding, 0)
 	payloads := make([]finding.Finding, 0)
-	decoders := make([]finding.Finding, 0)
 	invisibles := make([]finding.Finding, 0)
 	privateUse := make([]finding.Finding, 0)
 
@@ -355,8 +337,6 @@ func partitionFindings(findings []finding.Finding) ([]finding.Finding, []finding
 			correlations = append(correlations, item)
 		case "unicode/payload":
 			payloads = append(payloads, item)
-		case "unicode/decoder":
-			decoders = append(decoders, item)
 		case "unicode/invisible":
 			invisibles = append(invisibles, item)
 		case "unicode/private-use":
@@ -364,28 +344,7 @@ func partitionFindings(findings []finding.Finding) ([]finding.Finding, []finding
 		}
 	}
 
-	return correlations, payloads, decoders, invisibles, privateUse
-}
-
-func nearestDecoderIndex(reference finding.Finding, decoders []finding.Finding) int {
-	bestIndex := -1
-	bestDistance := 0
-
-	for index, decoder := range decoders {
-		if decoder.Path != reference.Path {
-			continue
-		}
-		distance := lineDistance(reference.Line, decoder.Line)
-		if distance > correlationDistanceLines {
-			continue
-		}
-		if bestIndex == -1 || distance < bestDistance || (distance == bestDistance && less(decoder, decoders[bestIndex])) {
-			bestIndex = index
-			bestDistance = distance
-		}
-	}
-
-	return bestIndex
+	return correlations, payloads, invisibles, privateUse
 }
 
 func overlaps(left, right finding.Finding) bool {
@@ -419,25 +378,17 @@ func findingEnd(item finding.Finding) (int, int) {
 	return endLine, endColumn
 }
 
-func newCorrelationFinding(item finding.Finding, decoders []finding.Finding, decoderIndex int) renderedFinding {
+func newCorrelationFinding(item finding.Finding) renderedFinding {
 	payloadEvidence, decoderEvidence := splitCorrelationEvidence(item.Evidence)
-	distance := 0
-	if decoderIndex >= 0 {
-		distance = lineDistance(item.Line, decoders[decoderIndex].Line)
-		if decoderEvidence == "" {
-			decoderEvidence = unicodeutil.RenderText(decoders[decoderIndex].Evidence)
-		}
-	}
-
 	correlationNote := item.Message
-	if decoderEvidence != "" && distance >= 0 {
-		correlationNote = fmt.Sprintf("hidden unicode sequence within %d line%s of %s", distance, plural(distance), decoderEvidence)
+	if decoderEvidence != "" {
+		correlationNote = fmt.Sprintf("hidden unicode payload correlated with %s", decoderEvidence)
 	}
 
 	return renderedFinding{
 		Path:        item.Path,
 		RuleID:      item.RuleID,
-		Title:       "hidden unicode payload sequence + decoder pattern",
+		Title:       "hidden unicode payload with nearby decode or execution pattern",
 		Line:        item.Line,
 		Column:      item.Column,
 		Evidence:    payloadEvidence,
@@ -492,8 +443,6 @@ func newRenderedFinding(item finding.Finding) renderedFinding {
 	case "unicode/directional-control":
 		rendered.Character = unicodeutil.RenderText(item.Evidence)
 		rendered.Explanation = "directional controls are invisible and can change how nearby text is rendered"
-	case "unicode/decoder":
-		rendered.Category = "decoder pattern"
 	case "unicode/mixed-script":
 		rendered.Category = "mixed-script token"
 	case "unicode/combining-mark":
@@ -510,8 +459,6 @@ func titleForFinding(item finding.Finding) string {
 			return "hidden unicode payload density"
 		}
 		return "hidden unicode payload sequence"
-	case "unicode/decoder":
-		return fmt.Sprintf("decoder pattern %q", item.Evidence)
 	case "unicode/invisible":
 		count := suspiciousRuneCount(item.Evidence)
 		if count > 1 {

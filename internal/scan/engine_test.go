@@ -573,7 +573,7 @@ func TestEngineScanFilePayloadFixtures(t *testing.T) {
 	}
 }
 
-func TestEngineScanFileDecoderFixtures(t *testing.T) {
+func TestEngineScanFileStandaloneDecoderFixturesStayInternal(t *testing.T) {
 	t.Parallel()
 
 	engine := NewEngine()
@@ -582,53 +582,13 @@ func TestEngineScanFileDecoderFixtures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ScanFile() error = %v", err)
 	}
-
-	decoderFindings := make([]struct {
-		line     int
-		column   int
-		message  string
-		evidence string
-	}, 0, 7)
 	for _, item := range findings {
-		if item.RuleID != "unicode/decoder" {
-			continue
+		if item.RuleID == "unicode/correlation" {
+			t.Fatalf("unexpected correlation finding without payload: %#v", item)
 		}
-		decoderFindings = append(decoderFindings, struct {
-			line     int
-			column   int
-			message  string
-			evidence string
-		}{
-			line:     item.Line,
-			column:   item.Column,
-			message:  item.Message,
-			evidence: item.Evidence,
-		})
 	}
-
-	want := []struct {
-		line     int
-		column   int
-		message  string
-		evidence string
-	}{
-		{line: 1, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: eval(", evidence: "eval("},
-		{line: 2, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: new Function(", evidence: "new Function("},
-		{line: 3, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: Buffer.from(", evidence: "Buffer.from("},
-		{line: 4, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: atob(", evidence: "atob("},
-		{line: 5, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: TextDecoder(", evidence: "TextDecoder("},
-		{line: 6, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument", evidence: "setTimeout(\"alert(1)\""},
-		{line: 7, column: 1, message: "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument", evidence: "setTimeout('alert(1)'"},
-	}
-
-	if len(decoderFindings) != len(want) {
-		t.Fatalf("len(decoderFindings) = %d, want %d", len(decoderFindings), len(want))
-	}
-
-	for index := range want {
-		if decoderFindings[index] != want[index] {
-			t.Fatalf("decoderFindings[%d] = %#v, want %#v", index, decoderFindings[index], want[index])
-		}
+	if len(findings) != 0 {
+		t.Fatalf("len(findings) = %d, want 0", len(findings))
 	}
 }
 
@@ -643,8 +603,8 @@ func TestEngineScanFileSetTimeoutCallbackIgnored(t *testing.T) {
 	}
 
 	for _, item := range findings {
-		if item.RuleID == "unicode/decoder" {
-			t.Fatalf("unexpected decoder finding: %#v", item)
+		if item.RuleID == "unicode/correlation" {
+			t.Fatalf("unexpected correlation finding: %#v", item)
 		}
 	}
 }
@@ -662,7 +622,7 @@ func TestEngineScanFileDecoderCorrelation(t *testing.T) {
 		{
 			name:        "payload within 20 lines",
 			fixture:     "correlated_decoder_near_payload.js",
-			wantMessage: "Suspicious encoded payload sequence detected: 17 consecutive invisible Unicode characters within 20 lines of eval(",
+			wantMessage: "Hidden Unicode payload with nearby decode / execution pattern: eval( (20 lines away)",
 		},
 		{
 			name:        "payload outside correlation window for far fixture",

@@ -21,6 +21,8 @@
 package detector
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -275,6 +277,20 @@ func TestPayloadDetect(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPayloadSuppressesPrivateUseFontAssetContext(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(filepath.Join("..", "..", "testdata", "assets", "font_private_use.svg"))
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	findings := NewPayload().Detect(testFileFromText("testdata/assets/font_private_use.svg", string(content)))
+	if len(findings) != 0 {
+		t.Fatalf("len(findings) = %d, want 0", len(findings))
 	}
 }
 

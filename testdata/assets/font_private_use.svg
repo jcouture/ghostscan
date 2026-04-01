@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <font id="ghost-icons">
+      <glyph glyph-name="check" unicode="&#xe001;" d="M0 0z" />
+      <glyph glyph-name="close" unicode="&#xe002;" d="M0 0z" />
+      <glyph glyph-name="alert" unicode="&#xe003;" d="M0 0z" />
+    </font>
+  </defs>
+</svg>
