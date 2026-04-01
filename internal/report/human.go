@@ -38,11 +38,12 @@ import (
 const correlationDistanceLines = 20
 
 type Options struct {
-	Version string
-	Color   bool
-	Verbose bool
-	Silent  bool
-	Runtime RuntimeStats
+	Version       string
+	Color         bool
+	Verbose       bool
+	Silent        bool
+	HeaderWritten bool
+	Runtime       RuntimeStats
 }
 
 const startupBanner = `
@@ -141,8 +142,10 @@ func (r *HumanReporter) Write(findings []finding.Finding, opts Options) error {
 		model = buildReport(findings, opts)
 	}
 
-	if err := r.writeHeader(model.version, opts.Silent); err != nil {
-		return fmt.Errorf("write report header: %w", err)
+	if !opts.HeaderWritten {
+		if err := r.writeHeader(model.version, opts.Silent); err != nil {
+			return fmt.Errorf("write report header: %w", err)
+		}
 	}
 
 	if model.summary.totalFindings > 0 && model.verbose {
@@ -165,6 +168,14 @@ func (r *HumanReporter) Write(findings []finding.Finding, opts Options) error {
 		return fmt.Errorf("write runtime summary: %w", err)
 	}
 
+	return nil
+}
+
+func WriteHeader(w io.Writer, version string, silent bool) error {
+	reporter := HumanReporter{writer: newReportWriter(w)}
+	if err := reporter.writeHeader(versionLabel(version), silent); err != nil {
+		return fmt.Errorf("write report header: %w", err)
+	}
 	return nil
 }
 

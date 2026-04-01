@@ -36,13 +36,15 @@ import (
 )
 
 type Options struct {
-	Path        string
-	Stdout      io.Writer
-	Color       bool
-	Verbose     bool
-	Silent      bool
-	MaxFileSize int64
-	Version     string
+	Path               string
+	Stdout             io.Writer
+	Color              bool
+	Verbose            bool
+	Silent             bool
+	MaxFileSize        int64
+	Excludes           []string
+	UseDefaultExcludes bool
+	Version            string
 }
 
 type Result struct {
@@ -75,7 +77,28 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		maxFileSize = filesystem.DefaultMaxFileSize
 	}
 
-	discovery, err := filesystem.Discover(path, maxFileSize)
+	useDefaultExcludes := true
+	if opts.Excludes != nil || !opts.UseDefaultExcludes {
+		useDefaultExcludes = opts.UseDefaultExcludes
+	}
+
+	excluder, err := filesystem.NewExcluder(opts.Excludes, useDefaultExcludes)
+	if err != nil {
+		return Result{}, fmt.Errorf("configure excludes: %w", err)
+	}
+	headerWritten := false
+	if opts.Verbose {
+		if err := report.WriteHeader(opts.Stdout, opts.Version, opts.Silent); err != nil {
+			return Result{}, fmt.Errorf("write report header: %w", err)
+		}
+		headerWritten = true
+	}
+
+	discovery, err := filesystem.Discover(path, filesystem.DiscoverOptions{
+		MaxFileSize: maxFileSize,
+		Excluder:    excluder,
+		OnExclude:   buildExcludeReporter(opts.Stdout, opts.Verbose),
+	})
 	if err != nil {
 		return Result{}, fmt.Errorf("discover files from %q: %w", path, err)
 	}
@@ -96,10 +119,11 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	finding.Sort(findings)
 
 	if err := report.WriteHuman(opts.Stdout, findings, report.Options{
-		Version: opts.Version,
-		Color:   opts.Color,
-		Verbose: opts.Verbose,
-		Silent:  opts.Silent,
+		Version:       opts.Version,
+		Color:         opts.Color,
+		Verbose:       opts.Verbose,
+		Silent:        opts.Silent,
+		HeaderWritten: headerWritten,
 		Runtime: report.RuntimeStats{
 			WalkDuration:          walkDuration,
 			ScanDuration:          scanDuration,
@@ -119,6 +143,16 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		HasFindings:          len(findings) > 0,
 		HadRecoverableErrors: len(scanErrors) > 0,
 	}, nil
+}
+
+func buildExcludeReporter(w io.Writer, verbose bool) func(path, pattern string) {
+	if !verbose {
+		return nil
+	}
+
+	return func(path, pattern string) {
+		_, _ = fmt.Fprintf(w, "SKIP %s (matched exclude: %q)\n", path, pattern)
+	}
 }
 
 func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([]fileScanResult, []error) {

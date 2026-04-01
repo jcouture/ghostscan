@@ -196,3 +196,33 @@ func TestRunSilentSuppressesBanner(t *testing.T) {
 		t.Fatalf("stdout = %q, want clean report", output)
 	}
 }
+
+func TestRunVerboseReportsExcludedFilesDuringTraversal(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "keep.js"), []byte("const x = 1;\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "app.min.js"), []byte("const y = 1;\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	var stdout bytes.Buffer
+	_, err := Run(context.Background(), Options{
+		Path:               root,
+		Stdout:             &stdout,
+		Verbose:            true,
+		Silent:             true,
+		UseDefaultExcludes: true,
+		Excludes:           []string{"**/*.min.js"},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "SKIP app.min.js (matched exclude: \"**/*.min.js\")") {
+		t.Fatalf("stdout = %q, want skip line", output)
+	}
+}

@@ -82,8 +82,10 @@ You should see `ghostscan dev (commit none)` from a plain source build, or a rea
 ghostscan [flags] [path]
 
 Flags:
+      --exclude strings     exclude files or directories matching this glob; repeatable
       --max-file-size int   skip files larger than this many bytes
   -n, --no-color            disable color
+      --no-default-excludes disable built-in exclude globs
       --silent              suppress the startup banner
       --verbose             print detailed structured finding blocks
   -v, --version             print version
@@ -107,6 +109,12 @@ ghostscan --silent --no-color .
 # Show detailed findings
 ghostscan --silent --no-color --verbose ./testdata/mixed/correlated_decoder_near_payload.js
 
+# Add repeatable exclude globs
+ghostscan . --exclude "**/*.min.js" --exclude "vendor/**"
+
+# Disable built-in excludes and use only an explicit glob
+ghostscan . --no-default-excludes --exclude "**/*.gen.js"
+
 # Enforce a smaller max file size
 ghostscan --max-file-size 1048576 .
 ```
@@ -121,6 +129,13 @@ ghostscan --max-file-size 1048576 .
 - local context
 - rule ID
 - fingerprint
+
+Verbose mode also reports exclusions during traversal:
+
+```text
+SKIP dist/app.min.js (matched exclude: "**/*.min.js")
+SKIP vendor (matched exclude: "vendor/**")
+```
 
 Exit codes:
 
@@ -138,7 +153,10 @@ The current scanner behavior is intentionally narrow and real:
 - Does not follow symlinks.
 - Treats files containing a NUL byte as binary and skips them.
 - Uses a default max file size of `5 MiB`.
-- Skips `.git`, `node_modules`, `vendor`, `dist`, `build`, `target`, `out`, and `coverage`.
+- Matches excludes against the full normalized relative path with `/` separators.
+- Supports repeatable `--exclude` globs with `**` matching zero or more path segments and `filepath.Match` semantics for other segments.
+- Applies built-in excludes by default: `.git/**`, `node_modules/**`, `vendor/**`, `dist/**`, `build/**`, `target/**`, `out/**`, and `coverage/**`.
+- `--no-default-excludes` disables the built-in exclude set completely.
 - Never executes scanned code or fetches network resources.
 
 ## FAQ

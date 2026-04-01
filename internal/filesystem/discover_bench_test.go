@@ -23,10 +23,18 @@ func BenchmarkDiscover(b *testing.B) {
 
 	for _, tc := range cases {
 		b.Run(tc.name, func(b *testing.B) {
+			excluder, err := NewExcluder(nil, true)
+			if err != nil {
+				b.Fatal(err)
+			}
+
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				benchDiscovery, benchErr = Discover(tc.root, DefaultMaxFileSize)
+				benchDiscovery, benchErr = Discover(tc.root, DiscoverOptions{
+					MaxFileSize: DefaultMaxFileSize,
+					Excluder:    excluder,
+				})
 				if benchErr != nil {
 					b.Fatal(benchErr)
 				}

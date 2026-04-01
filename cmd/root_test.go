@@ -96,6 +96,22 @@ func TestExecute(t *testing.T) {
 			wantCode: exitcode.ExecutionError,
 			wantErr:  "--max-file-size must be zero or greater",
 		},
+		{
+			name:     "repeated excludes",
+			args:     []string{"--no-color", "--exclude", "**/*.min.js", "--exclude", "vendor/**", filepath.Join("..", "testdata", "mixed")},
+			wantCode: exitcode.FindingsDetected,
+		},
+		{
+			name:     "invalid exclude glob",
+			args:     []string{"--exclude", "bad["},
+			wantCode: exitcode.ExecutionError,
+			wantErr:  "configure excludes",
+		},
+		{
+			name:     "no default excludes includes vendor fixture",
+			args:     []string{"--no-color", "--no-default-excludes", filepath.Join("..", "testdata", "clean")},
+			wantCode: exitcode.Success,
+		},
 	}
 
 	for _, tt := range tests {
@@ -163,6 +179,8 @@ func TestExecuteHelp(t *testing.T) {
 		"Usage:\n  ghostscan [flags] [path]",
 		"Optional file or directory to scan. Flags must come before the path.",
 		"--verbose",
+		"--exclude",
+		"--no-default-excludes",
 		"--silent",
 		"--max-file-size",
 	} {
