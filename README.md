@@ -4,7 +4,7 @@
 
 ## Overview
 
-It is built for security engineers, maintainers, Go developers, and DevOps teams who need a fast, local, deterministic check before code lands in CI, a release, or a dependency tree. Instead of trying to be a general SAST platform, it focuses narrowly on Unicode-based deception: hidden characters, misleading script mixing, payload-like sequences, and nearby decode-or-execute patterns. The differentiator is simple: it makes invisible evidence readable and keeps the output precise enough for code review and CI decisions.
+It is built for security engineers, maintainers, Go developers, and DevOps teams who need a fast, local, deterministic check before code lands in CI, a release, or a dependency tree. Instead of trying to be a general SAST platform, it focuses narrowly on Unicode-based deception: hidden characters, misleading script mixing, payload-like sequences, and nearby decode-or-execute patterns. Decoder and dynamic-execution markers are supporting context by default; the primary signal is the hidden Unicode itself and explicit payload correlations. The differentiator is simple: it makes invisible evidence readable and keeps the output precise enough for code review and CI decisions.
 
 ```bash
 ~> ghostscan --verbose ./testdata/invisible/single.txt
@@ -45,7 +45,8 @@ Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/in
 
 - **Visible evidence for invisible content**: Renders hidden Unicode as strings like `<U+200B ZERO WIDTH SPACE>`.
 - **Focused Unicode threat coverage**: Detects invisible characters, private-use Unicode, bidi controls, directional marks, mixed-script tokens, and combining marks.
-- **Payload-aware heuristics**: Flags long hidden sequences, dense suspicious regions, decoder markers, and payload-plus-decoder correlations.
+- **Payload-aware heuristics**: Flags long hidden sequences, dense suspicious regions, and explicit payload-plus-decoder correlations while keeping standalone decoder noise out of default results.
+- **Noise reduction for asset contexts**: Suppresses obvious private-use glyph mappings in font-like SVG assets so icon fonts do not dominate the report.
 - **Safe repository traversal**: Skips symlinks, NUL-containing files, oversize files, and common dependency or build directories.
 - **CI-friendly behavior**: Uses deterministic ordering, plain-text output, and exit codes `0`, `1`, and `2`.
 
@@ -129,6 +130,8 @@ ghostscan --max-file-size 1048576 .
 - local context
 - rule ID
 - fingerprint
+
+Standalone decoder and dynamic-execution markers are kept internal by default. When they appear near a hidden payload sequence, ghostscan emits a single correlated finding instead of separate decoder findings.
 
 Verbose mode also reports exclusions during traversal:
 

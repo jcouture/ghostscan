@@ -97,8 +97,7 @@ func (e *Engine) scanFileDetailed(ctx context.Context, path string, checkBinary 
 	findings = append(findings, detector.NewMixedScript().Detect(file)...)
 	findings = append(findings, detector.NewCombiningMark().Detect(file)...)
 	findings = append(findings, detector.NewPayload().Detect(file)...)
-	findings = append(findings, detector.NewDecoder().Detect(file)...)
-	findings = append(findings, detector.CorrelateFile(findings)...)
+	findings = append(findings, detector.CorrelateFile(file, findings)...)
 	enrichFindingContexts(fileContext, findings)
 
 	return FileResult{

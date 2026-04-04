@@ -21,6 +21,8 @@
 package detector
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jcouture/ghostscan/internal/finding"
@@ -89,6 +91,20 @@ func TestPrivateUseDetectCleanInput(t *testing.T) {
 			{Rune: '\n', Line: 1, Column: 3},
 		},
 	})
+	if len(findings) != 0 {
+		t.Fatalf("len(findings) = %d, want 0", len(findings))
+	}
+}
+
+func TestPrivateUseSuppressesFontAssetContext(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(filepath.Join("..", "..", "testdata", "assets", "font_private_use.svg"))
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	findings := NewPrivateUse().Detect(testFileFromText("testdata/assets/font_private_use.svg", string(content)))
 	if len(findings) != 0 {
 		t.Fatalf("len(findings) = %d, want 0", len(findings))
 	}

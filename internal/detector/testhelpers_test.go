@@ -18,58 +18,33 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package finding
+package detector
 
-import "sort"
+func testFileFromText(path, text string) File {
+	observations := make([]Observation, 0, len(text))
+	line := 1
+	column := 1
 
-func Sort(findings []Finding) {
-	sort.SliceStable(findings, func(i, j int) bool {
-		return less(findings[i], findings[j])
-	})
-}
+	for offset, r := range text {
+		observations = append(observations, Observation{
+			Rune:       r,
+			ByteOffset: offset,
+			Line:       line,
+			Column:     column,
+			Width:      len(string(r)),
+		})
 
-func less(left, right Finding) bool {
-	if left.Path != right.Path {
-		return left.Path < right.Path
-	}
-	if left.Line != right.Line {
-		return left.Line < right.Line
-	}
-	if left.Column != right.Column {
-		return left.Column < right.Column
-	}
-	if left.RuleID != right.RuleID {
-		leftPriority := rulePriority(left.RuleID)
-		rightPriority := rulePriority(right.RuleID)
-		if leftPriority != rightPriority {
-			return leftPriority < rightPriority
+		if r == '\n' {
+			line++
+			column = 1
+			continue
 		}
+		column++
 	}
-	if left.RuleID != right.RuleID {
-		return left.RuleID < right.RuleID
-	}
-	return left.Message < right.Message
-}
 
-func rulePriority(ruleID string) int {
-	switch ruleID {
-	case "unicode/correlation":
-		return 0
-	case "unicode/payload":
-		return 1
-	case "unicode/bidi":
-		return 2
-	case "unicode/invisible":
-		return 3
-	case "unicode/private-use":
-		return 4
-	case "unicode/directional-control":
-		return 5
-	case "unicode/mixed-script":
-		return 6
-	case "unicode/combining-mark":
-		return 7
-	default:
-		return 100
+	return File{
+		Path:         path,
+		Text:         text,
+		Observations: observations,
 	}
 }
