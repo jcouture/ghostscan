@@ -48,13 +48,9 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	flags.SetInterspersed(false)
 	flags.Usage = func() {
-		_, _ = fmt.Fprintln(stderr, "Usage:")
-		_, _ = fmt.Fprintln(stderr, "  ghostscan [flags] [path]")
-		_, _ = fmt.Fprintln(stderr)
-		_, _ = fmt.Fprintln(stderr, "Arguments:")
-		_, _ = fmt.Fprintln(stderr, "  [path]   Optional file or directory to scan. Flags must come before the path.")
-		_, _ = fmt.Fprintln(stderr)
-		_, _ = fmt.Fprintln(stderr, "Flags:")
+		_, _ = fmt.Fprintln(stderr, "ghostscan [flags] [path]")
+		_, _ = fmt.Fprintln(stderr, "path is optional; keep flags in front")
+		_, _ = fmt.Fprintln(stderr, "flags:")
 		flags.PrintDefaults()
 	}
 
@@ -66,14 +62,14 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var excludes []string
 	var noDefaultExcludes bool
 	var format string
-	flags.BoolVarP(&noColor, "no-color", "n", false, "disable color")
-	flags.BoolVarP(&version, "version", "v", false, "print version")
-	flags.BoolVar(&verbose, "verbose", false, "print detailed structured finding blocks")
-	flags.BoolVar(&silent, "silent", false, "suppress the startup banner")
-	flags.Int64Var(&maxFileSize, "max-file-size", 0, "skip files larger than this many bytes")
-	flags.StringArrayVar(&excludes, "exclude", nil, "exclude files or directories matching this glob; repeatable")
+	flags.BoolVarP(&noColor, "no-color", "n", false, "no ANSI paint")
+	flags.BoolVarP(&version, "version", "v", false, "print version and exit")
+	flags.BoolVar(&verbose, "verbose", false, "detailed finding blocks")
+	flags.BoolVar(&silent, "silent", false, "skip the banner")
+	flags.Int64Var(&maxFileSize, "max-file-size", 0, "skip files larger than this many bytes (0 = default)")
+	flags.StringArrayVar(&excludes, "exclude", nil, "glob to skip; repeat as needed")
 	flags.StringVar(&format, "format", string(app.OutputFormatHuman), "output format: human or json")
-	flags.BoolVar(&noDefaultExcludes, "no-default-excludes", false, "disable built-in exclude globs")
+	flags.BoolVar(&noDefaultExcludes, "no-default-excludes", false, "drop built-in excludes")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, pflag.ErrHelp) {

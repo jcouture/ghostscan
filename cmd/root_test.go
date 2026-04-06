@@ -280,8 +280,8 @@ func TestExecuteHelp(t *testing.T) {
 
 	help := stderr.String()
 	for _, want := range []string{
-		"Usage:\n  ghostscan [flags] [path]",
-		"Optional file or directory to scan. Flags must come before the path.",
+		"ghostscan [flags] [path]",
+		"path is optional; keep flags in front",
 		"--verbose",
 		"--exclude",
 		"--no-default-excludes",

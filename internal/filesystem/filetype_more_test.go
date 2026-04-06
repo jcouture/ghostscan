@@ -18,15 +18,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package filesystem
 
-import (
-	"os"
+import "testing"
 
-	"github.com/jcouture/ghostscan/cmd"
-)
+func TestSkipStatsHelpers(t *testing.T) {
+	t.Parallel()
 
-func main() {
-	// stay boring; bail early if wiring changes
-	os.Exit(cmd.Execute())
+	stats := newSkipStats()
+	stats.add(EligibilityReasonEligible)
+	stats.add(EligibilityReasonBinaryNUL)
+	stats.addN(EligibilityReasonTooLarge, 2)
+	stats.addN(EligibilityReasonExcluded, 0)
+
+	if stats.ByReason[EligibilityReasonBinaryNUL] != 1 {
+		t.Fatalf("binary count = %d, want 1", stats.ByReason[EligibilityReasonBinaryNUL])
+	}
+	if stats.ByReason[EligibilityReasonTooLarge] != 2 {
+		t.Fatalf("too_large count = %d, want 2", stats.ByReason[EligibilityReasonTooLarge])
+	}
+
+	var nilStats *SkipStats
+	nilStats.add(EligibilityReasonBinaryNUL)
+	nilStats.addN(EligibilityReasonTooLarge, 3)
 }

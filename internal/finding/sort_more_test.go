@@ -18,15 +18,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package main
+package finding
 
-import (
-	"os"
+import "testing"
 
-	"github.com/jcouture/ghostscan/cmd"
-)
+func TestRulePriority(t *testing.T) {
+	t.Parallel()
 
-func main() {
-	// stay boring; bail early if wiring changes
-	os.Exit(cmd.Execute())
+	tests := []struct {
+		ruleID string
+		want   int
+	}{
+		{ruleID: "unicode/correlation", want: 0},
+		{ruleID: "unicode/payload", want: 1},
+		{ruleID: "unicode/bidi", want: 2},
+		{ruleID: "unicode/invisible", want: 3},
+		{ruleID: "unicode/private-use", want: 4},
+		{ruleID: "unicode/directional-control", want: 5},
+		{ruleID: "unicode/mixed-script", want: 6},
+		{ruleID: "unicode/combining-mark", want: 7},
+		{ruleID: "unicode/unknown", want: 100},
+	}
+
+	for _, tt := range tests {
+		if got := rulePriority(tt.ruleID); got != tt.want {
+			t.Fatalf("rulePriority(%q) = %d, want %d", tt.ruleID, got, tt.want)
+		}
+	}
 }
