@@ -117,6 +117,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 
 	useDefaultExcludes := true
 	if opts.Excludes != nil || !opts.UseDefaultExcludes {
+		// Caller explicitly touched excludes; honor that even if the slice is empty.
 		useDefaultExcludes = opts.UseDefaultExcludes
 	}
 
@@ -225,6 +226,7 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 	for range workerCount {
 		go func() {
 			for job := range jobs {
+				// Per-file scans stay boring; workerCount is capped above on purpose.
 				result, err := engine.ScanTrustedTextFileDetailed(ctx, job.path)
 				results <- fileScanResult{
 					path:     job.path,

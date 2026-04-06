@@ -146,6 +146,7 @@ func NewHumanReporter(w io.Writer, opts Options) *HumanReporter {
 		color:   opts.Color,
 	}
 
+	// Keep zerolog here so runtime lines stay consistent with the rest of the tool.
 	reporter.logger = zerolog.New(newConsoleWriter(&reporter.logBuffer, opts.Color)).With().Timestamp().Logger()
 	return reporter
 }
@@ -248,6 +249,7 @@ func buildRenderedFindings(findings []finding.Finding) []renderedFinding {
 	}
 
 	sorted := append([]finding.Finding(nil), findings...)
+	// finding.Sort mutates, so copy first and then group per file.
 	finding.Sort(sorted)
 
 	rendered := make([]renderedFinding, 0, len(findings))

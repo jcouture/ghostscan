@@ -81,17 +81,20 @@ You should see `ghostscan dev (commit none)` from a plain source build, or a rea
 
 ```text
 ghostscan [flags] [path]
+path is optional; keep flags in front
 
 Flags:
-      --exclude strings     exclude files or directories matching this glob; repeatable
+      --exclude strings     glob to skip; repeat as needed
       --format string       output format: human or json (default "human")
-      --max-file-size int   skip files larger than this many bytes
-  -n, --no-color            disable color
-      --no-default-excludes disable built-in exclude globs
-      --silent              suppress the startup banner
-      --verbose             print detailed structured finding blocks
-  -v, --version             print version
+      --max-file-size int   skip files larger than this many bytes (0 = default)
+  -n, --no-color            no ANSI paint
+      --no-default-excludes drop built-in excludes
+      --silent              skip the banner
+      --verbose             detailed finding blocks
+  -v, --version             print version and exit
 ```
+
+Flags must come before the optional positional `path`. For example, use `ghostscan --silent .`, not `ghostscan . --silent`.
 
 ### Common Examples
 
@@ -112,10 +115,10 @@ ghostscan --silent --no-color .
 ghostscan --silent --no-color --verbose ./testdata/mixed/correlated_decoder_near_payload.js
 
 # Add repeatable exclude globs
-ghostscan . --exclude "**/*.min.js" --exclude "vendor/**"
+ghostscan --exclude "**/*.min.js" --exclude "vendor/**" .
 
 # Disable built-in excludes and use only an explicit glob
-ghostscan . --no-default-excludes --exclude "**/*.gen.js"
+ghostscan --no-default-excludes --exclude "**/*.gen.js" .
 
 # Enforce a smaller max file size
 ghostscan --max-file-size 1048576 .
@@ -161,6 +164,7 @@ Exit codes:
 The current scanner behavior is intentionally narrow and real:
 
 - Recursively scans a file or directory path.
+- Parses flags only before the optional file or directory path.
 - Does not follow symlinks.
 - Treats files containing a NUL byte as binary and skips them.
 - Uses a default max file size of `5 MiB`.
