@@ -37,10 +37,16 @@ import (
 
 type Options struct {
 	Version       string
+	Commit        string
+	Target        string
+	StartedAt     time.Time
+	CompletedAt   time.Time
 	Color         bool
 	Verbose       bool
 	Silent        bool
 	HeaderWritten bool
+	SkippedFiles  []SkippedFile
+	Errors        []ErrorEntry
 	Runtime       RuntimeStats
 }
 
@@ -76,6 +82,17 @@ type Count struct {
 	Value int
 }
 
+type SkippedFile struct {
+	File   string
+	Reason string
+	Detail string
+}
+
+type ErrorEntry struct {
+	File    string
+	Message string
+}
+
 type HumanReporter struct {
 	writer    reportWriter
 	palette   palette
@@ -106,9 +123,12 @@ type fileReport struct {
 type renderedFinding struct {
 	Path        string
 	RuleID      string
+	Message     string
 	Title       string
 	Line        int
 	Column      int
+	EndLine     int
+	EndColumn   int
 	Evidence    string
 	Context     string
 	Character   string
@@ -388,9 +408,12 @@ func newCorrelationFinding(item finding.Finding) renderedFinding {
 	return renderedFinding{
 		Path:        item.Path,
 		RuleID:      item.RuleID,
+		Message:     item.Message,
 		Title:       "hidden unicode payload with nearby decode or execution pattern",
 		Line:        item.Line,
 		Column:      item.Column,
+		EndLine:     item.EndLine,
+		EndColumn:   item.EndColumn,
 		Evidence:    payloadEvidence,
 		Context:     unicodeutil.RenderText(item.Context),
 		Count:       suspiciousRuneCount(payloadEvidence),
@@ -419,9 +442,12 @@ func newRenderedFinding(item finding.Finding) renderedFinding {
 	rendered := renderedFinding{
 		Path:        item.Path,
 		RuleID:      item.RuleID,
+		Message:     item.Message,
 		Title:       titleForFinding(item),
 		Line:        item.Line,
 		Column:      item.Column,
+		EndLine:     item.EndLine,
+		EndColumn:   item.EndColumn,
 		Evidence:    unicodeutil.RenderText(item.Evidence),
 		Context:     unicodeutil.RenderText(item.Context),
 		Fingerprint: fingerprint(item),
@@ -530,7 +556,7 @@ func sortRenderedFindings(findings []renderedFinding) {
 		if findings[i].RuleID != findings[j].RuleID {
 			return findings[i].RuleID < findings[j].RuleID
 		}
-		return findings[i].Title < findings[j].Title
+		return findings[i].Message < findings[j].Message
 	})
 }
 

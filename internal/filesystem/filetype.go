@@ -36,12 +36,14 @@ const (
 type EligibilityReason string
 
 const (
-	EligibilityReasonEligible   EligibilityReason = ""
-	EligibilityReasonExcluded   EligibilityReason = "excluded"
-	EligibilityReasonNotRegular EligibilityReason = "not_regular"
-	EligibilityReasonTooLarge   EligibilityReason = "too_large"
-	EligibilityReasonBinaryNUL  EligibilityReason = "binary_nul"
-	EligibilityReasonSymlink    EligibilityReason = "symlink"
+	EligibilityReasonEligible    EligibilityReason = ""
+	EligibilityReasonExcluded    EligibilityReason = "excluded"
+	EligibilityReasonExcludedDir EligibilityReason = "excluded_directory"
+	EligibilityReasonNotRegular  EligibilityReason = "not_regular"
+	EligibilityReasonTooLarge    EligibilityReason = "too_large"
+	EligibilityReasonBinaryNUL   EligibilityReason = "binary_nul"
+	EligibilityReasonSymlink     EligibilityReason = "symlink"
+	EligibilityReasonPermission  EligibilityReason = "permission_denied"
 )
 
 type Eligibility struct {
@@ -52,6 +54,12 @@ type Eligibility struct {
 
 type SkipStats struct {
 	ByReason map[EligibilityReason]int
+}
+
+type SkippedFile struct {
+	Path   string
+	Reason EligibilityReason
+	Detail string
 }
 
 func newSkipStats() SkipStats {
