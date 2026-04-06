@@ -48,7 +48,7 @@ Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/in
 - **Payload-aware heuristics**: Flags long hidden sequences, dense suspicious regions, and explicit payload-plus-decoder correlations while keeping standalone decoder noise out of default results.
 - **Noise reduction for asset contexts**: Suppresses obvious private-use glyph mappings in font-like SVG assets so icon fonts do not dominate the report.
 - **Safe repository traversal**: Skips symlinks, NUL-containing files, oversize files, and common dependency or build directories.
-- **CI-friendly behavior**: Uses deterministic ordering, plain-text output, and exit codes `0`, `1`, and `2`.
+- **CI-friendly behavior**: Uses deterministic ordering, human or JSON output, and exit codes `0`, `1`, and `2`.
 
 ## Installation
 
@@ -84,6 +84,7 @@ ghostscan [flags] [path]
 
 Flags:
       --exclude strings     exclude files or directories matching this glob; repeatable
+      --format string       output format: human or json (default "human")
       --max-file-size int   skip files larger than this many bytes
   -n, --no-color            disable color
       --no-default-excludes disable built-in exclude globs
@@ -118,11 +119,16 @@ ghostscan . --no-default-excludes --exclude "**/*.gen.js"
 
 # Enforce a smaller max file size
 ghostscan --max-file-size 1048576 .
+
+# Emit machine-readable JSON
+ghostscan --format json ./testdata/invisible/single.txt
 ```
 
 ## Output and Exit Codes
 
-`ghostscan` prints a human-readable terminal report. In verbose mode, each finding includes:
+`ghostscan` prints a human-readable terminal report by default and emits a single JSON document when `--format json` is selected.
+
+In human verbose mode, each finding includes:
 
 - file path
 - line and column
@@ -139,6 +145,8 @@ Verbose mode also reports exclusions during traversal:
 SKIP dist/app.min.js (matched exclude: "**/*.min.js")
 SKIP vendor (matched exclude: "vendor/**")
 ```
+
+JSON output always writes one document to stdout with `tool`, `scan`, `summary`, `findings`, `skipped_files`, and `errors` keys, without ANSI color or human log lines. In JSON mode, fatal execution errors are emitted as a structured report with `errors` populated and exit code `2`.
 
 Exit codes:
 

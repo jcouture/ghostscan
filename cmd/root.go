@@ -26,11 +26,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/spf13/pflag"
 
 	"github.com/jcouture/ghostscan/internal/app"
 	"github.com/jcouture/ghostscan/internal/exitcode"
+	"github.com/jcouture/ghostscan/internal/report"
 )
 
 func Execute() int {
@@ -63,18 +65,26 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var maxFileSize int64
 	var excludes []string
 	var noDefaultExcludes bool
+	var format string
 	flags.BoolVarP(&noColor, "no-color", "n", false, "disable color")
 	flags.BoolVarP(&version, "version", "v", false, "print version")
 	flags.BoolVar(&verbose, "verbose", false, "print detailed structured finding blocks")
 	flags.BoolVar(&silent, "silent", false, "suppress the startup banner")
 	flags.Int64Var(&maxFileSize, "max-file-size", 0, "skip files larger than this many bytes")
 	flags.StringArrayVar(&excludes, "exclude", nil, "exclude files or directories matching this glob; repeatable")
+	flags.StringVar(&format, "format", string(app.OutputFormatHuman), "output format: human or json")
 	flags.BoolVar(&noDefaultExcludes, "no-default-excludes", false, "disable built-in exclude globs")
 
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, pflag.ErrHelp) {
 			return exitcode.Success
 		}
+		return exitcode.ExecutionError
+	}
+
+	outputFormat := app.OutputFormat(format)
+	if err := outputFormat.Validate(); err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
 		return exitcode.ExecutionError
 	}
 
@@ -104,12 +114,26 @@ func execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		Color:              !noColor,
 		Verbose:            verbose,
 		Silent:             silent,
+		Format:             outputFormat,
 		MaxFileSize:        maxFileSize,
 		Excludes:           excludes,
 		UseDefaultExcludes: !noDefaultExcludes,
 		Version:            Version,
+		Commit:             Commit,
 	})
 	if err != nil {
+		if outputFormat == app.OutputFormatJSON {
+			now := time.Now().UTC()
+			if jsonErr := report.WriteJSONError(stdout, report.Options{
+				Version:     Version,
+				Commit:      Commit,
+				Target:      path,
+				StartedAt:   now,
+				CompletedAt: now,
+			}, err); jsonErr == nil {
+				return exitcode.ExecutionError
+			}
+		}
 		_, _ = fmt.Fprintln(stderr, err)
 		return exitcode.ExecutionError
 	}

@@ -21,6 +21,7 @@
 package filesystem
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -37,6 +38,7 @@ type DiscoveryStats struct {
 	FilesDiscovered   int
 	DirectoriesPruned int
 	Skipped           SkipStats
+	SkippedFiles      []SkippedFile
 }
 
 type DiscoverOptions struct {
@@ -83,7 +85,7 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 			return Discovery{}, err
 		}
 		if matchedPattern, excluded := excluder.MatchPath(relativePath); excluded {
-			stats.Skipped.add(EligibilityReasonExcluded)
+			recordSkip(&stats, relativePath, EligibilityReasonExcluded, matchedExcludeDetail(matchedPattern))
 			if opts.OnExclude != nil {
 				opts.OnExclude(relativePath, matchedPattern)
 			}
@@ -94,7 +96,7 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 			return Discovery{}, err
 		}
 		if !eligibility.Eligible {
-			stats.Skipped.add(eligibility.Reason)
+			recordSkip(&stats, relativePath, eligibility.Reason, skipDetail(eligibility, maxFileSize))
 			return Discovery{Stats: stats}, nil
 		}
 		return Discovery{Candidates: []string{absoluteRoot}, Stats: stats}, nil
@@ -107,6 +109,14 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 	candidates := make([]string, 0)
 	walkErr := filepath.WalkDir(absoluteRoot, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
+			if errors.Is(walkErr, fs.ErrPermission) && path != absoluteRoot {
+				relativePath, err := normalizeRelativePath(absoluteRoot, path, false)
+				if err != nil {
+					return err
+				}
+				recordSkip(&stats, relativePath, EligibilityReasonPermission, walkErr.Error())
+				return nil
+			}
 			return fmt.Errorf("walk %q: %w", path, walkErr)
 		}
 
@@ -120,19 +130,24 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 		}
 
 		if isSymlink(entry.Type()) {
-			stats.Skipped.add(EligibilityReasonSymlink)
+			recordSkip(&stats, relativePath, EligibilityReasonSymlink, "")
 			return nil
 		}
 
 		if matchedPattern, excluded := excluder.MatchPath(relativePath); excluded {
 			if entry.IsDir() {
 				stats.DirectoriesPruned++
+				stats.SkippedFiles = append(stats.SkippedFiles, SkippedFile{
+					Path:   relativePath,
+					Reason: EligibilityReasonExcludedDir,
+					Detail: matchedExcludeDetail(matchedPattern),
+				})
 				if opts.OnExclude != nil {
 					opts.OnExclude(relativePath, matchedPattern)
 				}
 				return filepath.SkipDir
 			}
-			stats.Skipped.add(EligibilityReasonExcluded)
+			recordSkip(&stats, relativePath, EligibilityReasonExcluded, matchedExcludeDetail(matchedPattern))
 			if opts.OnExclude != nil {
 				opts.OnExclude(relativePath, matchedPattern)
 			}
@@ -145,17 +160,21 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 
 		stats.FilesDiscovered++
 		if !isRegularFileCandidate(entry.Type()) {
-			stats.Skipped.add(EligibilityReasonNotRegular)
+			recordSkip(&stats, relativePath, EligibilityReasonNotRegular, "")
 			return nil
 		}
 
 		eligibility, err := CheckFile(path, maxFileSize)
 		if err != nil {
+			if errors.Is(err, fs.ErrPermission) {
+				recordSkip(&stats, relativePath, EligibilityReasonPermission, err.Error())
+				return nil
+			}
 			return err
 		}
 
 		if !eligibility.Eligible {
-			stats.Skipped.add(eligibility.Reason)
+			recordSkip(&stats, relativePath, eligibility.Reason, skipDetail(eligibility, maxFileSize))
 			return nil
 		}
 
@@ -167,5 +186,37 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 	}
 
 	sort.Strings(candidates)
+	sort.SliceStable(stats.SkippedFiles, func(i, j int) bool {
+		if stats.SkippedFiles[i].Path != stats.SkippedFiles[j].Path {
+			return stats.SkippedFiles[i].Path < stats.SkippedFiles[j].Path
+		}
+		if stats.SkippedFiles[i].Reason != stats.SkippedFiles[j].Reason {
+			return stats.SkippedFiles[i].Reason < stats.SkippedFiles[j].Reason
+		}
+		return stats.SkippedFiles[i].Detail < stats.SkippedFiles[j].Detail
+	})
 	return Discovery{Candidates: candidates, Stats: stats}, nil
+}
+
+func recordSkip(stats *DiscoveryStats, path string, reason EligibilityReason, detail string) {
+	stats.Skipped.add(reason)
+	stats.SkippedFiles = append(stats.SkippedFiles, SkippedFile{
+		Path:   path,
+		Reason: reason,
+		Detail: detail,
+	})
+}
+
+func matchedExcludeDetail(pattern string) string {
+	if pattern == "" {
+		return ""
+	}
+	return fmt.Sprintf("matched exclude: %q", pattern)
+}
+
+func skipDetail(eligibility Eligibility, maxFileSize int64) string {
+	if eligibility.Reason == EligibilityReasonTooLarge {
+		return fmt.Sprintf("file size %d exceeds limit %d", eligibility.Size, maxFileSize)
+	}
+	return ""
 }

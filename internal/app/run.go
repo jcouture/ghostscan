@@ -41,10 +41,29 @@ type Options struct {
 	Color              bool
 	Verbose            bool
 	Silent             bool
+	Format             OutputFormat
 	MaxFileSize        int64
 	Excludes           []string
 	UseDefaultExcludes bool
 	Version            string
+	Commit             string
+	Now                func() time.Time
+}
+
+type OutputFormat string
+
+const (
+	OutputFormatHuman OutputFormat = "human"
+	OutputFormatJSON  OutputFormat = "json"
+)
+
+func (f OutputFormat) Validate() error {
+	switch f {
+	case "", OutputFormatHuman, OutputFormatJSON:
+		return nil
+	default:
+		return fmt.Errorf("unsupported --format %q; supported values are: human, json", f)
+	}
 }
 
 type Result struct {
@@ -59,6 +78,11 @@ type fileScanResult struct {
 	err      error
 }
 
+type scanError struct {
+	path string
+	err  error
+}
+
 func Run(ctx context.Context, opts Options) (Result, error) {
 	select {
 	case <-ctx.Done():
@@ -71,7 +95,21 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		path = "."
 	}
 
-	walkStart := time.Now()
+	format := opts.Format
+	if format == "" {
+		format = OutputFormatHuman
+	}
+	if err := format.Validate(); err != nil {
+		return Result{}, err
+	}
+
+	now := opts.Now
+	if now == nil {
+		now = time.Now
+	}
+
+	runStart := now().UTC()
+	walkStart := now()
 	maxFileSize := opts.MaxFileSize
 	if maxFileSize <= 0 {
 		maxFileSize = filesystem.DefaultMaxFileSize
@@ -87,7 +125,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		return Result{}, fmt.Errorf("configure excludes: %w", err)
 	}
 	headerWritten := false
-	if opts.Verbose {
+	if format == OutputFormatHuman && opts.Verbose {
 		if err := report.WriteHeader(opts.Stdout, opts.Version, opts.Silent); err != nil {
 			return Result{}, fmt.Errorf("write report header: %w", err)
 		}
@@ -97,17 +135,19 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	discovery, err := filesystem.Discover(path, filesystem.DiscoverOptions{
 		MaxFileSize: maxFileSize,
 		Excluder:    excluder,
-		OnExclude:   buildExcludeReporter(opts.Stdout, opts.Verbose),
+		OnExclude:   buildExcludeReporter(opts.Stdout, format == OutputFormatHuman && opts.Verbose),
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("discover files from %q: %w", path, err)
 	}
-	walkDuration := time.Since(walkStart)
+	walkCompleted := now()
+	walkDuration := walkCompleted.Sub(walkStart)
 
 	engine := scan.NewEngine()
-	scanStart := time.Now()
+	scanStart := walkCompleted
 	results, scanErrors := scanCandidates(ctx, engine, discovery.Candidates)
-	scanDuration := time.Since(scanStart)
+	scanCompleted := now()
+	scanDuration := scanCompleted.Sub(scanStart)
 
 	findings := make([]finding.Finding, 0)
 	var bytesScanned int64
@@ -118,12 +158,18 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 
 	finding.Sort(findings)
 
-	if err := report.WriteHuman(opts.Stdout, findings, report.Options{
+	reportOpts := report.Options{
 		Version:       opts.Version,
+		Commit:        opts.Commit,
+		Target:        path,
+		StartedAt:     runStart,
+		CompletedAt:   scanCompleted.UTC(),
 		Color:         opts.Color,
 		Verbose:       opts.Verbose,
 		Silent:        opts.Silent,
 		HeaderWritten: headerWritten,
+		SkippedFiles:  reportSkippedFiles(discovery.Stats.SkippedFiles),
+		Errors:        reportErrors(scanErrors),
 		Runtime: report.RuntimeStats{
 			WalkDuration:          walkDuration,
 			ScanDuration:          scanDuration,
@@ -135,7 +181,13 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			SkippedByReason:       sortedSkipCounts(discovery.Stats.Skipped.ByReason),
 			FindingsByRule:        sortedFindingCounts(findings),
 		},
-	}); err != nil {
+	}
+
+	if format == OutputFormatJSON {
+		if err := report.WriteJSON(opts.Stdout, findings, reportOpts); err != nil {
+			return Result{}, fmt.Errorf("write report: %w", err)
+		}
+	} else if err := report.WriteHuman(opts.Stdout, findings, reportOpts); err != nil {
 		return Result{}, fmt.Errorf("write report: %w", err)
 	}
 
@@ -155,7 +207,7 @@ func buildExcludeReporter(w io.Writer, verbose bool) func(path, pattern string) 
 	}
 }
 
-func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([]fileScanResult, []error) {
+func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([]fileScanResult, []scanError) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -196,18 +248,18 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 	}()
 
 	completed := make([]fileScanResult, 0, len(paths))
-	scanErrors := make([]error, 0)
+	scanErrors := make([]scanError, 0)
 	for range paths {
 		select {
 		case <-ctx.Done():
-			return completed, append(scanErrors, ctx.Err())
+			return completed, append(scanErrors, scanError{err: ctx.Err()})
 		case result := <-results:
 			if result.err != nil {
 				if errors.Is(result.err, scan.ErrBinaryContent) {
-					scanErrors = append(scanErrors, fmt.Errorf("scan discovered file %q: %w", result.path, result.err))
+					scanErrors = append(scanErrors, scanError{path: result.path, err: fmt.Errorf("scan discovered file %q: %w", result.path, result.err)})
 					continue
 				}
-				scanErrors = append(scanErrors, fmt.Errorf("scan discovered file %q: %w", result.path, result.err))
+				scanErrors = append(scanErrors, scanError{path: result.path, err: fmt.Errorf("scan discovered file %q: %w", result.path, result.err)})
 				continue
 			}
 			completed = append(completed, result)
@@ -217,7 +269,66 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 	sort.SliceStable(completed, func(i, j int) bool {
 		return completed[i].path < completed[j].path
 	})
+	sort.SliceStable(scanErrors, func(i, j int) bool {
+		if scanErrors[i].path != scanErrors[j].path {
+			return scanErrors[i].path < scanErrors[j].path
+		}
+		return scanErrors[i].err.Error() < scanErrors[j].err.Error()
+	})
 	return completed, scanErrors
+}
+
+func reportSkippedFiles(skipped []filesystem.SkippedFile) []report.SkippedFile {
+	if len(skipped) == 0 {
+		return nil
+	}
+
+	items := make([]report.SkippedFile, 0, len(skipped))
+	for _, item := range skipped {
+		items = append(items, report.SkippedFile{
+			File:   item.Path,
+			Reason: mapSkipReason(item.Reason),
+			Detail: item.Detail,
+		})
+	}
+	return items
+}
+
+func reportErrors(scanErrors []scanError) []report.ErrorEntry {
+	if len(scanErrors) == 0 {
+		return nil
+	}
+
+	items := make([]report.ErrorEntry, 0, len(scanErrors))
+	for _, item := range scanErrors {
+		if item.err == nil {
+			continue
+		}
+		items = append(items, report.ErrorEntry{
+			File:    item.path,
+			Message: item.err.Error(),
+		})
+	}
+	return items
+}
+
+func mapSkipReason(reason filesystem.EligibilityReason) string {
+	switch reason {
+	case filesystem.EligibilityReasonBinaryNUL:
+		return "binary"
+	case filesystem.EligibilityReasonTooLarge:
+		return "max_file_size_exceeded"
+	case filesystem.EligibilityReasonExcluded:
+		return "excluded"
+	case filesystem.EligibilityReasonExcludedDir:
+		return "excluded_directory"
+	case filesystem.EligibilityReasonSymlink:
+		return "symlink"
+	case filesystem.EligibilityReasonPermission:
+		return "permission_denied"
+	default:
+		return "other"
+	}
 }
 
 func sortedSkipCounts(counts map[filesystem.EligibilityReason]int) []report.Count {

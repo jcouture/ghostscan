@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -112,6 +113,12 @@ func TestExecute(t *testing.T) {
 			args:     []string{"--no-color", "--no-default-excludes", filepath.Join("..", "testdata", "clean")},
 			wantCode: exitcode.Success,
 		},
+		{
+			name:     "invalid output format",
+			args:     []string{"--format", "sarif"},
+			wantCode: exitcode.ExecutionError,
+			wantErr:  "unsupported --format",
+		},
 	}
 
 	for _, tt := range tests {
@@ -157,6 +164,103 @@ func TestExecute(t *testing.T) {
 				t.Fatalf("stderr = %q, want substring %q", stderr.String(), tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestExecuteJSONFormat(t *testing.T) {
+	t.Parallel()
+
+	var stdout strings.Builder
+	var stderr strings.Builder
+
+	code := execute(context.Background(), []string{"--format", "json", filepath.Join("..", "testdata", "clean")}, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Fatalf("execute() code = %d, want %d", code, exitcode.Success)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty output", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "########") || strings.Contains(stdout.String(), "INF ") || strings.Contains(stdout.String(), "\x1b[") {
+		t.Fatalf("stdout = %q, want JSON-only output", stdout.String())
+	}
+
+	var decoded struct {
+		Tool struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+			Commit  string `json:"commit"`
+		} `json:"tool"`
+		Findings []any `json:"findings"`
+		Errors   []any `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(stdout.String()), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v\nstdout=%s", err, stdout.String())
+	}
+	if decoded.Tool.Name != "ghostscan" || decoded.Tool.Version == "" || decoded.Tool.Commit == "" {
+		t.Fatalf("tool = %+v, want populated ghostscan metadata", decoded.Tool)
+	}
+	if len(decoded.Findings) != 0 || len(decoded.Errors) != 0 {
+		t.Fatalf("decoded = %+v, want clean report", decoded)
+	}
+}
+
+func TestExecuteJSONFormatFindingsExitCode(t *testing.T) {
+	t.Parallel()
+
+	var stdout strings.Builder
+	var stderr strings.Builder
+
+	code := execute(context.Background(), []string{"--format", "json", filepath.Join("..", "testdata", "invisible")}, &stdout, &stderr)
+	if code != exitcode.FindingsDetected {
+		t.Fatalf("execute() code = %d, want %d", code, exitcode.FindingsDetected)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty output", stderr.String())
+	}
+
+	var decoded struct {
+		Summary struct {
+			FindingsTotal int `json:"findings_total"`
+		} `json:"summary"`
+		Findings []struct {
+			RuleID string `json:"rule_id"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(stdout.String()), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v\nstdout=%s", err, stdout.String())
+	}
+	if decoded.Summary.FindingsTotal == 0 || len(decoded.Findings) == 0 {
+		t.Fatalf("decoded = %+v, want findings", decoded)
+	}
+	if decoded.Findings[0].RuleID == "" {
+		t.Fatalf("findings[0] = %+v, want rule id", decoded.Findings[0])
+	}
+}
+
+func TestExecuteJSONFormatExecutionError(t *testing.T) {
+	t.Parallel()
+
+	var stdout strings.Builder
+	var stderr strings.Builder
+
+	code := execute(context.Background(), []string{"--format", "json", filepath.Join(t.TempDir(), "missing")}, &stdout, &stderr)
+	if code != exitcode.ExecutionError {
+		t.Fatalf("execute() code = %d, want %d", code, exitcode.ExecutionError)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want no stderr when JSON error report is emitted", stderr.String())
+	}
+
+	var decoded struct {
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(stdout.String()), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v\nstdout=%s", err, stdout.String())
+	}
+	if len(decoded.Errors) != 1 || !strings.Contains(decoded.Errors[0].Message, "discover files from") {
+		t.Fatalf("errors = %+v, want structured fatal execution error", decoded.Errors)
 	}
 }
 
