@@ -31,12 +31,13 @@ func TestCheckFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		path    string
-		maxSize int64
-		want    Eligibility
-		wantErr string
-		prepare func(t *testing.T) string
+		name        string
+		path        string
+		maxSize     int64
+		binaryCheck func([]byte) bool
+		want        Eligibility
+		wantErr     string
+		prepare     func(t *testing.T) string
 	}{
 		{
 			name:    "plain text fixture is eligible",
@@ -83,6 +84,36 @@ func TestCheckFile(t *testing.T) {
 			path:    filepath.Join(t.TempDir(), "missing.txt"),
 			wantErr: "stat file",
 		},
+		{
+			name:        "binary check returning true marks file as binary_magic",
+			path:        testdataPath("text", "plain.txt"),
+			maxSize:     DefaultMaxFileSize,
+			binaryCheck: func(_ []byte) bool { return true },
+			want:        Eligibility{Reason: EligibilityReasonBinaryMagic},
+		},
+		{
+			name:        "binary check returning false leaves file eligible",
+			path:        testdataPath("text", "plain.txt"),
+			maxSize:     DefaultMaxFileSize,
+			binaryCheck: func(_ []byte) bool { return false },
+			want:        Eligibility{Eligible: true},
+		},
+		{
+			name:        "nul check wins over binary check",
+			path:        testdataPath("binary", "contains_nul.bin"),
+			maxSize:     DefaultMaxFileSize,
+			binaryCheck: func(_ []byte) bool { return false },
+			want:        Eligibility{Reason: EligibilityReasonBinaryNUL},
+		},
+		{
+			name:    "pdf fixture without nul is caught by magic check",
+			path:    testdataPath("binary", "minimal.pdf"),
+			maxSize: DefaultMaxFileSize,
+			binaryCheck: func(buf []byte) bool {
+				return strings.HasPrefix(string(buf), "%PDF-")
+			},
+			want: Eligibility{Reason: EligibilityReasonBinaryMagic},
+		},
 	}
 
 	for _, tt := range tests {
@@ -94,7 +125,7 @@ func TestCheckFile(t *testing.T) {
 				path = tt.prepare(t)
 			}
 
-			got, err := CheckFile(path, tt.maxSize)
+			got, err := CheckFile(path, tt.maxSize, tt.binaryCheck)
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatal("CheckFile() error = nil, want error")

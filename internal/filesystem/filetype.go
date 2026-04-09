@@ -42,6 +42,7 @@ const (
 	EligibilityReasonNotRegular  EligibilityReason = "not_regular"
 	EligibilityReasonTooLarge    EligibilityReason = "too_large"
 	EligibilityReasonBinaryNUL   EligibilityReason = "binary_nul"
+	EligibilityReasonBinaryMagic EligibilityReason = "binary_magic"
 	EligibilityReasonSymlink     EligibilityReason = "symlink"
 	EligibilityReasonPermission  EligibilityReason = "permission_denied"
 )
@@ -88,7 +89,10 @@ func isRegularFileCandidate(mode fs.FileMode) bool {
 	return mode.IsRegular()
 }
 
-func CheckFile(path string, maxSize int64) (Eligibility, error) {
+// CheckFile checks whether the file at path is eligible for scanning.
+// binaryCheck, if non-nil, is called with the first defaultBinaryInspectLen bytes of the file
+// after the NUL check passes; returning true marks the file as binary_magic.
+func CheckFile(path string, maxSize int64, binaryCheck func([]byte) bool) (Eligibility, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return Eligibility{}, fmt.Errorf("stat file %q: %w", path, err)
@@ -106,21 +110,26 @@ func CheckFile(path string, maxSize int64) (Eligibility, error) {
 		return Eligibility{Reason: EligibilityReasonTooLarge, Size: info.Size()}, nil
 	}
 
-	binary, err := fileContainsNUL(path, defaultBinaryInspectLen)
+	header, hasNUL, err := readBinaryHeader(path, defaultBinaryInspectLen)
 	if err != nil {
 		return Eligibility{}, err
 	}
-	if binary {
+	if hasNUL {
 		return Eligibility{Reason: EligibilityReasonBinaryNUL, Size: info.Size()}, nil
+	}
+	if binaryCheck != nil && binaryCheck(header) {
+		return Eligibility{Reason: EligibilityReasonBinaryMagic, Size: info.Size()}, nil
 	}
 
 	return Eligibility{Eligible: true, Reason: EligibilityReasonEligible, Size: info.Size()}, nil
 }
 
-func fileContainsNUL(path string, limit int64) (bool, error) {
+// readBinaryHeader reads up to limit bytes from path and reports whether a NUL byte was found.
+// It returns the bytes read so callers can apply additional checks against the same data.
+func readBinaryHeader(path string, limit int64) (data []byte, hasNUL bool, err error) {
 	file, err := os.Open(path) // #nosec G304 -- path comes from the filesystem walker, not user input
 	if err != nil {
-		return false, fmt.Errorf("open file %q: %w", path, err)
+		return nil, false, fmt.Errorf("open file %q: %w", path, err)
 	}
 	defer file.Close()
 
@@ -128,28 +137,13 @@ func fileContainsNUL(path string, limit int64) (bool, error) {
 		limit = defaultBinaryInspectLen
 	}
 
-	buffer := make([]byte, 4096)
-	remaining := limit
-	for remaining > 0 {
-		readLen := len(buffer)
-		if int64(readLen) > remaining {
-			readLen = int(remaining)
-		}
+	buf := make([]byte, limit)
+	n, readErr := io.ReadFull(file, buf)
+	data = buf[:n]
 
-		n, readErr := file.Read(buffer[:readLen])
-		if n > 0 && bytes.IndexByte(buffer[:n], 0) >= 0 {
-			return true, nil
-		}
-
-		remaining -= int64(n)
-		if readErr == nil {
-			continue
-		}
-		if readErr == io.EOF {
-			return false, nil
-		}
-		return false, fmt.Errorf("read file %q: %w", path, readErr)
+	if readErr != nil && readErr != io.ErrUnexpectedEOF && readErr != io.EOF {
+		return nil, false, fmt.Errorf("read file %q: %w", path, readErr)
 	}
 
-	return false, nil
+	return data, bytes.IndexByte(data, 0) >= 0, nil
 }

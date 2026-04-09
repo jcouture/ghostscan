@@ -147,6 +147,27 @@ func TestExcluder(t *testing.T) {
 			wantPattern:     "**/*.lock",
 			wantMatch:       true,
 		},
+		{
+			name:            "root .git directory is excluded by default",
+			includeDefaults: true,
+			path:            ".git",
+			wantPattern:     "**/.git/**",
+			wantMatch:       true,
+		},
+		{
+			name:            "nested .git directory is excluded by default",
+			includeDefaults: true,
+			path:            "submodule/.git",
+			wantPattern:     "**/.git/**",
+			wantMatch:       true,
+		},
+		{
+			name:            "deeply nested .git directory is excluded by default",
+			includeDefaults: true,
+			path:            "packages/ui/vendor/.git",
+			wantPattern:     "**/.git/**",
+			wantMatch:       true,
+		},
 	}
 
 	for _, tt := range tests {

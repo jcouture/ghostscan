@@ -27,7 +27,7 @@ import (
 )
 
 var defaultExcludePatterns = []string{
-	".git/**",
+	"**/.git/**",
 	"node_modules/**",
 	"vendor/**",
 	"dist/**",

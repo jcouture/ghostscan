@@ -45,6 +45,7 @@ type DiscoverOptions struct {
 	MaxFileSize int64
 	Excluder    *Excluder
 	OnExclude   func(path, pattern string)
+	BinaryCheck func([]byte) bool
 }
 
 // Discover returns clean absolute paths for regular-file scan candidates.
@@ -91,7 +92,7 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 			}
 			return Discovery{Stats: stats}, nil
 		}
-		eligibility, err := CheckFile(absoluteRoot, maxFileSize)
+		eligibility, err := CheckFile(absoluteRoot, maxFileSize, opts.BinaryCheck)
 		if err != nil {
 			return Discovery{}, err
 		}
@@ -164,7 +165,7 @@ func Discover(root string, opts DiscoverOptions) (Discovery, error) {
 			return nil
 		}
 
-		eligibility, err := CheckFile(path, maxFileSize)
+		eligibility, err := CheckFile(path, maxFileSize, opts.BinaryCheck)
 		if err != nil {
 			if errors.Is(err, fs.ErrPermission) {
 				recordSkip(&stats, relativePath, EligibilityReasonPermission, err.Error())
