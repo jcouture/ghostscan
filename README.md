@@ -73,7 +73,7 @@ go install github.com/jcouture/ghostscan@latest
 ghostscan --version
 ```
 
-> **Requirements:** Go `1.26.1` is pinned in `go.mod` and `mise.toml` for source builds. Pre-built release archives are produced for Linux, macOS, and Windows.
+> **Requirements:** Go `1.26.2` is pinned in `go.mod` and `mise.toml` for source builds. Pre-built release archives are produced for Linux, macOS, and Windows.
 
 You should see `ghostscan dev (commit none)` from a plain source build, or a real tag and commit in a release build.
 
