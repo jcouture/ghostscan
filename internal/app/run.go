@@ -27,12 +27,14 @@ import (
 	"io"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jcouture/ghostscan/internal/filesystem"
 	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/report"
 	"github.com/jcouture/ghostscan/internal/scan"
+	"github.com/shirou/gofile"
 )
 
 type Options struct {
@@ -108,6 +110,14 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		now = time.Now
 	}
 
+	identifier, err := gofile.New(gofile.Options{MimeType: true})
+	if err != nil {
+		return Result{}, fmt.Errorf("initialize binary identifier: %w", err)
+	}
+	binaryCheck := func(buf []byte) bool {
+		return isBinaryMIME(identifier.IdentifyBuffer(buf))
+	}
+
 	runStart := now().UTC()
 	walkStart := now()
 	maxFileSize := opts.MaxFileSize
@@ -137,6 +147,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		MaxFileSize: maxFileSize,
 		Excluder:    excluder,
 		OnExclude:   buildExcludeReporter(opts.Stdout, format == OutputFormatHuman && opts.Verbose),
+		BinaryCheck: binaryCheck,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("discover files from %q: %w", path, err)
@@ -314,9 +325,32 @@ func reportErrors(scanErrors []scanError) []report.ErrorEntry {
 	return items
 }
 
+func isBinaryMIME(mimeType string) bool {
+	if mimeType == "" {
+		return false
+	}
+	return strings.HasPrefix(mimeType, "image/") ||
+		strings.HasPrefix(mimeType, "audio/") ||
+		strings.HasPrefix(mimeType, "video/") ||
+		strings.HasPrefix(mimeType, "font/") ||
+		mimeType == "application/pdf" ||
+		mimeType == "application/octet-stream" ||
+		mimeType == "application/zip" ||
+		mimeType == "application/gzip" ||
+		mimeType == "application/x-gzip" ||
+		mimeType == "application/x-bzip2" ||
+		mimeType == "application/x-tar" ||
+		mimeType == "application/x-7z-compressed" ||
+		mimeType == "application/vnd.rar" ||
+		mimeType == "application/java-archive" ||
+		mimeType == "application/x-java-class" ||
+		mimeType == "application/wasm" ||
+		mimeType == "application/x-sqlite3"
+}
+
 func mapSkipReason(reason filesystem.EligibilityReason) string {
 	switch reason {
-	case filesystem.EligibilityReasonBinaryNUL:
+	case filesystem.EligibilityReasonBinaryNUL, filesystem.EligibilityReasonBinaryMagic:
 		return "binary"
 	case filesystem.EligibilityReasonTooLarge:
 		return "max_file_size_exceeded"

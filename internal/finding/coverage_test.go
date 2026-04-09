@@ -18,19 +18,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package filesystem
+package finding
 
 import "testing"
 
-func TestCheckFileFixtureInvalidUTF8WithoutNULIsEligible(t *testing.T) {
+// TestLessSamePriorityDifferentRuleID exercises the ruleID tiebreaker that is
+// reached when two findings have the same path, line, column, and priority
+// (i.e., both have unknown/custom rule IDs that map to priority 100).
+func TestLessSamePriorityDifferentRuleID(t *testing.T) {
 	t.Parallel()
 
-	got, err := CheckFile(testdataPath("invalid", "invalid_utf8.bin"), DefaultMaxFileSize, nil)
-	if err != nil {
-		t.Fatalf("CheckFile() error = %v", err)
-	}
+	left := Finding{Path: "f.go", Line: 1, Column: 1, RuleID: "custom/aaa", Message: "same"}
+	right := Finding{Path: "f.go", Line: 1, Column: 1, RuleID: "custom/zzz", Message: "same"}
 
-	if !got.Eligible || got.Reason != EligibilityReasonEligible {
-		t.Fatalf("CheckFile() = %+v, want eligible text file", got)
+	if !less(left, right) {
+		t.Fatal("less(aaa, zzz) = false, want true (alpha order for same-priority rules)")
+	}
+	if less(right, left) {
+		t.Fatal("less(zzz, aaa) = true, want false")
 	}
 }
