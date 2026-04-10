@@ -27,52 +27,6 @@ import (
 	"testing"
 )
 
-// --- isBinaryMIME ---
-
-func TestIsBinaryMIME(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		mime string
-		want bool
-	}{
-		{"", false},
-		{"text/plain", false},
-		{"text/html", false},
-		{"application/json", false},
-		{"application/javascript", false},
-		{"application/pdf", true},
-		{"application/octet-stream", true},
-		{"image/png", true},
-		{"image/jpeg", true},
-		{"image/gif", true},
-		{"image/svg+xml", true},
-		{"audio/mpeg", true},
-		{"video/mp4", true},
-		{"font/ttf", true},
-		{"application/zip", true},
-		{"application/gzip", true},
-		{"application/x-gzip", true},
-		{"application/x-bzip2", true},
-		{"application/x-tar", true},
-		{"application/x-7z-compressed", true},
-		{"application/vnd.rar", true},
-		{"application/java-archive", true},
-		{"application/x-java-class", true},
-		{"application/wasm", true},
-		{"application/x-sqlite3", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.mime, func(t *testing.T) {
-			t.Parallel()
-			if got := isBinaryMIME(tt.mime); got != tt.want {
-				t.Fatalf("isBinaryMIME(%q) = %v, want %v", tt.mime, got, tt.want)
-			}
-		})
-	}
-}
-
 // --- Run with invalid format ---
 
 func TestRunInvalidFormat(t *testing.T) {

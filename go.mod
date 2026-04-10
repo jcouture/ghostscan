@@ -7,7 +7,7 @@ require github.com/fatih/color v1.19.0
 require github.com/rs/zerolog v1.35.0
 
 require (
-	github.com/shirou/gofile v0.0.0-20260314143841-7dc06be96404
+	github.com/h2non/filetype v1.1.3
 	github.com/spf13/pflag v1.0.10
 )
 
