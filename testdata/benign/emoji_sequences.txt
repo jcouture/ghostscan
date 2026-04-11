@@ -1,0 +1,5 @@
+Simple emoji with variation selector: ℹ️ ☀️ ⚠️
+Skin tones: 👍🏽 👩🏻
+ZWJ sequences: 👨‍👩‍👧 👩‍💻 🏳️‍🌈
+Keycaps: 1️⃣ 2️⃣
+Flags: 🇨🇦 🇺🇸

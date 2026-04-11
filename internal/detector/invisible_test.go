@@ -69,6 +69,15 @@ func TestInvisibleDetectMultipleOccurrences(t *testing.T) {
 	assertFinding(t, findings[2], "testdata/invisible/multiple.txt", 2, 4, "<U+2060 WORD JOINER>")
 }
 
+func TestInvisibleDetectSkipsEmojiZWJSequence(t *testing.T) {
+	t.Parallel()
+
+	findings := NewInvisible().Detect(testFileFromText("testdata/benign/emoji_sequences.txt", "👨‍👩‍👧"))
+	if len(findings) != 0 {
+		t.Fatalf("len(findings) = %d, want 0", len(findings))
+	}
+}
+
 func assertFinding(t *testing.T, got finding.Finding, wantPath string, wantLine, wantColumn int, wantEvidence string) {
 	t.Helper()
 

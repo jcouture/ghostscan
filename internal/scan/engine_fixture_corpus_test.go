@@ -389,8 +389,21 @@ func TestEngineScanPositionAndBenignFixtures(t *testing.T) {
 			fixture: fixturePath("benign", "emoji_and_cjk.txt"),
 		},
 		{
+			name:    "emoji sequences stay clean",
+			fixture: fixturePath("benign", "emoji_sequences.txt"),
+		},
+		{
 			name:    "decoder words without call syntax stay clean",
 			fixture: fixturePath("benign", "prose_decoder_words.txt"),
+		},
+		{
+			name:    "fake emoji attempts stay suspicious",
+			fixture: fixturePath("malicious", "fake_emoji.txt"),
+			expected: []expectedFinding{
+				{ruleID: "unicode/combining-mark", line: 1, column: 7, evidence: "\"admiń\" (<U+0301>)"},
+				{ruleID: "unicode/combining-mark", line: 2, column: 7, evidence: "\"icon️\" (<U+FE0F>)"},
+				{ruleID: "unicode/combining-mark", line: 3, column: 5, evidence: "\"1⃝\" (<U+20DD>)"},
+			},
 		},
 		{
 			name:    "font asset private use stays suppressed",

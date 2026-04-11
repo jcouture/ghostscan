@@ -78,8 +78,9 @@ func (Invisible) Detect(file File) []finding.Finding {
 		return nil
 	}
 
+	runes := observationsRunes(file.Observations)
 	findings := make([]finding.Finding, 0)
-	for _, run := range groupObservations(file.Observations, unicodeutil.IsInvisible) {
+	for _, run := range groupInvisibleObservations(file.Observations, runes) {
 		findings = append(findings, groupedUnicodeFinding(
 			file.Path,
 			run,
@@ -90,4 +91,30 @@ func (Invisible) Detect(file File) []finding.Finding {
 	}
 
 	return findings
+}
+
+func groupInvisibleObservations(observations []Observation, runes []rune) []observationRun {
+	runs := make([]observationRun, 0)
+	start := -1
+
+	flush := func(end int) {
+		if start == -1 {
+			return
+		}
+		runs = append(runs, observationRun{observations: observations[start:end]})
+		start = -1
+	}
+
+	for index, observation := range observations {
+		if !unicodeutil.IsInvisible(observation.Rune) || unicodeutil.IsValidEmojiZWJSequence(runes, index) {
+			flush(index)
+			continue
+		}
+		if start == -1 {
+			start = index
+		}
+	}
+
+	flush(len(observations))
+	return runs
 }
