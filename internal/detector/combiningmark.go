@@ -74,9 +74,13 @@ func detectCombiningMarkToken(path string, token []Observation) (finding.Finding
 	var hasBaseTokenRune bool
 	marks := make([]string, 0, 2)
 	seenMarks := make(map[rune]bool)
+	runes := observationsRunes(token)
 
-	for _, observation := range token {
+	for index, observation := range token {
 		if unicodeutil.IsCombiningMark(observation.Rune) {
+			if unicodeutil.IsValidEmojiCombiningSequence(runes, index) {
+				continue
+			}
 			if !seenMarks[observation.Rune] {
 				seenMarks[observation.Rune] = true
 				marks = append(marks, unicodeutil.RenderRune(observation.Rune))
@@ -105,4 +109,12 @@ func detectCombiningMarkToken(path string, token []Observation) (finding.Finding
 
 func isCombiningTokenRune(r rune) bool {
 	return isTokenRune(r) || unicodeutil.IsCombiningMark(r)
+}
+
+func observationsRunes(observations []Observation) []rune {
+	runes := make([]rune, len(observations))
+	for index, observation := range observations {
+		runes[index] = observation.Rune
+	}
+	return runes
 }

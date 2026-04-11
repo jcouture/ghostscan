@@ -62,6 +62,40 @@ func TestCombiningMarkDetect(t *testing.T) {
 			wantCount: 0,
 		},
 		{
+			name: "keycap emoji sequence is ignored",
+			file: File{
+				Path:         "testdata/benign/emoji_sequences.txt",
+				Observations: tokenObservations("1️⃣", 1, 1),
+			},
+			wantCount: 0,
+		},
+		{
+			name: "ascii with emoji variation selector is still suspicious",
+			file: File{
+				Path:         "testdata/malicious/fake_emoji.txt",
+				Observations: tokenObservations("a️", 1, 1),
+			},
+			wantCount: 1,
+			wantFindings: []finding.Finding{
+				{
+					Path:     "testdata/malicious/fake_emoji.txt",
+					Line:     1,
+					Column:   1,
+					RuleID:   CombiningMarkRuleID,
+					Message:  "Combining mark detected in token-like text",
+					Evidence: "\"a️\" (<U+FE0F>)",
+				},
+			},
+		},
+		{
+			name: "digit with enclosing keycap without emoji selector is ignored",
+			file: File{
+				Path:         "testdata/benign/emoji_sequences.txt",
+				Observations: tokenObservations("2⃣", 1, 1),
+			},
+			wantCount: 0,
+		},
+		{
 			name: "standalone combining mark is ignored",
 			file: File{
 				Path: "testdata/combining/clean.txt",

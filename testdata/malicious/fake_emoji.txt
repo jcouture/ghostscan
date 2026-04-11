@@ -1,0 +1,3 @@
+const admiń = "combining acute on ascii"
+const icon️ = "variation selector on ascii"
+let 1⃝ = "enclosing mark on digit"
