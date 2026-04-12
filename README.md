@@ -47,7 +47,7 @@ Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/in
 - **Focused Unicode threat coverage**: Detects invisible characters, private-use Unicode, bidi controls, directional marks, mixed-script tokens, and combining marks.
 - **Payload-aware heuristics**: Flags long hidden sequences, dense suspicious regions, and explicit payload-plus-decoder correlations while keeping standalone decoder noise out of default results.
 - **Noise reduction for asset contexts**: Suppresses obvious private-use glyph mappings in font-like SVG assets so icon fonts do not dominate the report.
-- **Safe repository traversal**: Skips symlinks, NUL-containing files, oversize files, and common dependency or build directories.
+- **Safe repository traversal**: Skips symlinks, binary files, oversize files, and common dependency or build directories.
 - **CI-friendly behavior**: Uses deterministic ordering, human or JSON output, and exit codes `0`, `1`, and `2`.
 
 ## Installation
@@ -166,7 +166,7 @@ The current scanner behavior is intentionally narrow and real:
 - Recursively scans a file or directory path.
 - Parses flags only before the optional file or directory path.
 - Does not follow symlinks.
-- Treats files containing a NUL byte as binary and skips them.
+- Treats files containing a NUL byte or recognized binary magic signature as binary and skips them.
 - Uses a default max file size of `5 MiB`.
 - Matches excludes against the full normalized relative path with `/` separators.
 - Supports repeatable `--exclude` globs with `**` matching zero or more path segments and `filepath.Match` semantics for other segments.
