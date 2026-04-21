@@ -20,6 +20,15 @@
 
 package finding
 
+type Severity string
+
+const (
+	SeverityLow      Severity = "LOW"
+	SeverityMedium   Severity = "MEDIUM"
+	SeverityHigh     Severity = "HIGH"
+	SeverityCritical Severity = "CRITICAL"
+)
+
 type Finding struct {
 	Path      string
 	Line      int
@@ -27,6 +36,7 @@ type Finding struct {
 	EndLine   int
 	EndColumn int
 	RuleID    string
+	Severity  Severity
 	Message   string
 	Evidence  string
 	Context   string

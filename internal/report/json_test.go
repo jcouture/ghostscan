@@ -42,6 +42,7 @@ func TestBuildJSONReport(t *testing.T) {
 			EndLine:   8,
 			EndColumn: 3,
 			RuleID:    "unicode/bidi",
+			Severity:  finding.SeverityHigh,
 			Message:   "Trojan Source bidi control character detected: U+202E RIGHT-TO-LEFT OVERRIDE",
 			Evidence:  "<U+202E RIGHT-TO-LEFT OVERRIDE>",
 		},
@@ -52,6 +53,7 @@ func TestBuildJSONReport(t *testing.T) {
 			EndLine:   2,
 			EndColumn: 4,
 			RuleID:    "unicode/payload",
+			Severity:  finding.SeverityCritical,
 			Message:   "Suspicious encoded payload sequence detected: 4 consecutive invisible Unicode characters",
 			Evidence:  "<U+200B ZERO WIDTH SPACE><U+200B ZERO WIDTH SPACE><U+200D ZERO WIDTH JOINER><U+200B ZERO WIDTH SPACE>",
 		},
@@ -96,6 +98,9 @@ func TestBuildJSONReport(t *testing.T) {
 	}
 	if report.Findings[0].Category != "payload" || report.Findings[1].Category != "bidi" {
 		t.Fatalf("Findings categories = %q, %q, want payload and bidi", report.Findings[0].Category, report.Findings[1].Category)
+	}
+	if report.Findings[0].Severity != "CRITICAL" || report.Findings[1].Severity != "HIGH" {
+		t.Fatalf("Findings severities = %q, %q, want CRITICAL and HIGH", report.Findings[0].Severity, report.Findings[1].Severity)
 	}
 	if len(report.Findings[0].Codepoints) != 2 {
 		t.Fatalf("len(Codepoints) = %d, want deduplicated U+200B and U+200D", len(report.Findings[0].Codepoints))

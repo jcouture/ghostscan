@@ -4,7 +4,7 @@ go 1.26.2
 
 require github.com/fatih/color v1.19.0
 
-require github.com/rs/zerolog v1.35.0
+require github.com/rs/zerolog v1.35.1
 
 require (
 	github.com/h2non/filetype v1.1.3

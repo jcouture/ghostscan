@@ -92,6 +92,10 @@ func (Payload) Detect(file File) []finding.Finding {
 	}
 
 	for index, observation := range file.Observations {
+		if observation.ByteOffset == 0 && observation.Rune == '\uFEFF' {
+			flush(index)
+			continue
+		}
 		class := classifyPayloadRune(observation.Rune)
 		if class == payloadClassNone {
 			flush(index)
@@ -172,6 +176,9 @@ func detectPayloadDensity(file File) []finding.Finding {
 
 	classes := make([]payloadClass, len(file.Observations))
 	for index, observation := range file.Observations {
+		if observation.ByteOffset == 0 && observation.Rune == '\uFEFF' {
+			continue
+		}
 		classes[index] = classifyPayloadDensityRune(observation.Rune)
 	}
 

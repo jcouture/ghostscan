@@ -42,7 +42,6 @@ func TestEngineScanExpandedInvisibleFixtures(t *testing.T) {
 			name:    "file start and end invisibles",
 			fixture: fixturePath("invisible", "file_edges.js"),
 			expected: []expectedFinding{
-				{ruleID: "unicode/invisible", line: 1, column: 1, evidence: "<U+FEFF ZERO WIDTH NO-BREAK SPACE>"},
 				{ruleID: "unicode/invisible", line: 2, column: 21, evidence: "<U+2060 WORD JOINER>"},
 			},
 		},
