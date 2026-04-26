@@ -21,7 +21,6 @@
 package scan
 
 import (
-	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -52,17 +51,13 @@ const (
 	sequenceVeryLongRun = "very_long_run"
 )
 
-type pathHints struct {
-	testLike          bool
-	fixtureLike       bool
-	localizationLike  bool
-	documentationLike bool
-	vendorLike        bool
-}
-
 type fileClassification struct {
 	shape string
-	hints pathHints
+}
+
+type invisibleTraits struct {
+	count    int
+	onlyFEFF bool
 }
 
 func classifyAndFilterFindings(fileContext *Context, findings []finding.Finding) []finding.Finding {
@@ -70,9 +65,9 @@ func classifyAndFilterFindings(fileContext *Context, findings []finding.Finding)
 		return findings
 	}
 
+	shape := classifyFileShape(fileContext.Text)
 	classification := fileClassification{
-		shape: classifyFileShape(fileContext.Text),
-		hints: classifyPathHints(fileContext.Path),
+		shape: shape,
 	}
 
 	filtered := findings[:0]
@@ -81,6 +76,7 @@ func classifyAndFilterFindings(fileContext *Context, findings []finding.Finding)
 			continue
 		}
 		item.Severity = classifyFindingSeverity(fileContext, classification, item)
+		item.Message = classifyFindingMessage(classification, item)
 		filtered = append(filtered, item)
 	}
 	return filtered
@@ -108,10 +104,7 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 	case detector.PrivateUseRuleID:
 		severity = privateUseSeverity(classification.shape, region, profile)
 	case detector.InvisibleRuleID:
-		severity = invisibleSeverity(classification.shape, region, profile)
-		if shouldApplyPathHintDowngrade(classification.hints, item, region, profile, severity) {
-			severity = downgradeSeverity(severity)
-		}
+		severity = invisibleSeverity(classification, region, profile, invisibleTraitsForFinding(item))
 	case detector.PayloadRuleID:
 		severity = payloadSeverity(profile)
 	case detector.CorrelationRuleID:
@@ -124,6 +117,30 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 		severity = applyDecoderProximity(severity, fileContext.Prepass.DecoderMarkers, item)
 	}
 	return severity
+}
+
+func classifyFindingMessage(classification fileClassification, item finding.Finding) string {
+	if item.RuleID != detector.InvisibleRuleID {
+		return item.Message
+	}
+
+	profile := classifySequenceProfile(suspiciousRuneCountForFinding(item))
+	traits := invisibleTraitsForFinding(item)
+
+	switch {
+	case traits.onlyFEFF && traits.count == 1:
+		return "Non-leading U+FEFF detected"
+	case traits.onlyFEFF && traits.count > 1:
+		return "Repeated U+FEFF invisible sequence detected"
+	case profile == sequenceIsolated:
+		return "Isolated invisible Unicode character detected"
+	case profile == sequenceShortRun:
+		return "Short invisible Unicode sequence detected"
+	case profile == sequenceLongRun || profile == sequenceVeryLongRun:
+		return "Long invisible Unicode run suggests encoded payload"
+	default:
+		return "Invisible Unicode sequence detected"
+	}
 }
 
 func privateUseSeverity(shape, region, profile string) finding.Severity {
@@ -142,17 +159,23 @@ func privateUseSeverity(shape, region, profile string) finding.Severity {
 	return finding.SeverityHigh
 }
 
-func invisibleSeverity(shape, region, profile string) finding.Severity {
+func invisibleSeverity(classification fileClassification, region, profile string, traits invisibleTraits) finding.Severity {
 	switch profile {
 	case sequenceLongRun, sequenceVeryLongRun:
 		return finding.SeverityCritical
 	case sequenceMediumRun:
 		return finding.SeverityHigh
 	case sequenceShortRun:
-		if shape == fileShapeProseLike || shape == fileShapeDataLike {
+		if region == regionTokenLike {
+			return finding.SeverityHigh
+		}
+		if region == regionCommentLike || region == regionWhitespaceLike || region == regionProseLike {
 			return finding.SeverityLow
 		}
-		if shape == fileShapeCodeLike || region == regionStringLike {
+		if classification.shape == fileShapeProseLike || classification.shape == fileShapeDataLike {
+			return finding.SeverityLow
+		}
+		if classification.shape == fileShapeCodeLike || region == regionStringLike {
 			return finding.SeverityMedium
 		}
 		return finding.SeverityMedium
@@ -161,14 +184,14 @@ func invisibleSeverity(shape, region, profile string) finding.Severity {
 	switch {
 	case region == regionTokenLike:
 		return finding.SeverityHigh
-	case shape == fileShapeProseLike || region == regionCommentLike || region == regionWhitespaceLike:
+	case traits.onlyFEFF:
 		return finding.SeverityLow
-	case region == regionStringLike && shape == fileShapeDataLike:
+	case classification.shape == fileShapeProseLike || region == regionCommentLike || region == regionWhitespaceLike:
 		return finding.SeverityLow
-	case region == regionStringLike && shape == fileShapeCodeLike:
-		return finding.SeverityMedium
+	case region == regionStringLike && classification.shape == fileShapeDataLike:
+		return finding.SeverityLow
 	default:
-		return finding.SeverityMedium
+		return finding.SeverityLow
 	}
 }
 
@@ -190,13 +213,6 @@ func defaultSeverity(ruleID string) finding.Severity {
 	default:
 		return finding.SeverityMedium
 	}
-}
-
-func shouldApplyPathHintDowngrade(hints pathHints, item finding.Finding, region, profile string, severity finding.Severity) bool {
-	if item.RuleID != detector.InvisibleRuleID || profile != sequenceIsolated || region == regionTokenLike || severity == finding.SeverityHigh || severity == finding.SeverityCritical {
-		return false
-	}
-	return hints.testLike || hints.fixtureLike || hints.localizationLike || hints.documentationLike || hints.vendorLike
 }
 
 func applyDecoderProximity(severity finding.Severity, markers []Marker, item finding.Finding) finding.Severity {
@@ -225,19 +241,6 @@ func findingLineDistance(left, right int) int {
 		return left - right
 	}
 	return right - left
-}
-
-func downgradeSeverity(severity finding.Severity) finding.Severity {
-	switch severity {
-	case finding.SeverityCritical:
-		return finding.SeverityHigh
-	case finding.SeverityHigh:
-		return finding.SeverityMedium
-	case finding.SeverityMedium:
-		return finding.SeverityLow
-	default:
-		return finding.SeverityLow
-	}
 }
 
 func upgradeSeverity(severity finding.Severity) finding.Severity {
@@ -276,35 +279,13 @@ func suspiciousRuneCountForFinding(item finding.Finding) int {
 	return count
 }
 
-func classifyPathHints(path string) pathHints {
-	normalized := strings.ToLower(strings.ReplaceAll(path, "\\", "/"))
-	trimmed := strings.Trim(normalized, "/")
-	segments := strings.Split(trimmed, "/")
-	if trimmed == "" {
-		segments = nil
+func invisibleTraitsForFinding(item finding.Finding) invisibleTraits {
+	count := suspiciousRuneCountForFinding(item)
+	hasFEFF := strings.Contains(item.Evidence, "<U+FEFF ")
+	return invisibleTraits{
+		count:    count,
+		onlyFEFF: hasFEFF && count == strings.Count(item.Evidence, "<U+FEFF "),
 	}
-	base := filepath.Base(normalized)
-	base = strings.TrimSuffix(base, filepath.Ext(base))
-	segments = append(segments, base)
-
-	var hints pathHints
-	for _, segment := range segments {
-		switch {
-		case containsAny(segment, "test", "tests", "spec", "__tests__"):
-			hints.testLike = true
-		}
-		switch segment {
-		case "fixture", "fixtures", "testdata", "sample", "samples", "example", "examples":
-			hints.fixtureLike = true
-		case "locale", "locales", "i18n", "translations", "messages":
-			hints.localizationLike = true
-		case "doc", "docs", "documentation":
-			hints.documentationLike = true
-		case "vendor", "third_party", "third-party", "deps", "node_modules":
-			hints.vendorLike = true
-		}
-	}
-	return hints
 }
 
 func containsAny(text string, needles ...string) bool {

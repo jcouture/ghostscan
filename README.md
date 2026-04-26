@@ -47,7 +47,7 @@ Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/in
 - **Visible evidence for invisible content**: Renders hidden Unicode as strings like `<U+200B ZERO WIDTH SPACE>`.
 - **Focused Unicode threat coverage**: Detects invisible characters, private-use Unicode, bidi controls, directional marks, mixed-script tokens, and combining marks.
 - **Payload-aware heuristics**: Flags long hidden sequences, dense suspicious regions, and explicit payload-plus-decoder correlations while keeping standalone decoder noise out of default results.
-- **Context-aware severity**: Uses bounded content-based file shape checks, local finding region checks, path hints, and decoder proximity to reduce low-value invisible-character noise without downgrading bidi controls or long suspicious runs.
+- **Context-aware severity**: Uses bounded content-based file shape checks, file-kind classification, local finding region checks, and decoder proximity to reduce low-value invisible-character noise without downgrading bidi controls or long suspicious runs.
 - **Noise reduction for asset contexts**: Suppresses obvious private-use glyph mappings in font-like SVG assets so icon fonts do not dominate the report.
 - **Safe repository traversal**: Skips symlinks, binary files, oversize files, and common dependency or build directories.
 - **CI-friendly behavior**: Uses deterministic ordering, human or JSON output, and exit codes `0`, `1`, and `2`.
@@ -185,14 +185,14 @@ Every finding is assigned one of four severity levels: `LOW`, `MEDIUM`, `HIGH`, 
 
 | Severity   | Meaning |
 |------------|---------|
-| `LOW`      | Suspicious but likely benign. Isolated invisible characters in prose, comments, whitespace, or data strings. Safe to review at lower priority. |
-| `MEDIUM`   | Warrants investigation. Short invisible runs in code strings, isolated invisible characters in code-like files, private-use characters in data or prose, directional controls, and combining marks in tokens. |
+| `LOW`      | Suspicious but likely benign. Isolated invisible characters, non-leading single `U+FEFF`, and short accidental zero-width runs in prose, comments, whitespace, and data-like text. Safe to review at lower priority. |
+| `MEDIUM`   | Warrants investigation. Short invisible runs in executable source strings or unknown regions, private-use characters in data or prose, directional controls, and combining marks in tokens. |
 | `HIGH`     | Likely intentional obfuscation. Invisible characters inside identifiers, medium-length suspicious runs, private-use characters in code, bidi control characters, mixed-script tokens, and payload sequences. |
 | `CRITICAL` | Strong attack signal. Long invisible or private-use runs (16+ characters), payload sequences with long runs, and any finding correlated with a nearby decode or dynamic-execution pattern. |
 
 ### How Severity Is Computed
 
-Severity is derived from four inputs, all computed from file content and path — never from file extensions alone:
+Severity is derived from four inputs, all computed from file content and local context:
 
 1. **Sequence length** — how many suspicious runes appear in the finding. Isolated characters (1) are treated differently from short runs (2–5), medium runs (6–15), long runs (16–63), and very long runs (64+). Longer sequences receive higher severity regardless of context.
 
@@ -207,7 +207,7 @@ Severity is derived from four inputs, all computed from file content and path �
 | Rule | Base severity logic |
 |------|-------------------|
 | `unicode/bidi` | Always `HIGH`. Bidi controls are never downgraded by context, comments, prose, or path hints. |
-| `unicode/invisible` | Ranges from `LOW` to `CRITICAL` depending on sequence length, file shape, and region. Isolated characters in prose or comments are `LOW`; in identifiers they are `HIGH`; long runs are `CRITICAL`. |
+| `unicode/invisible` | Ranges from `LOW` to `CRITICAL` depending on sequence length, file shape, and region. A file-start BOM is suppressed. A single non-leading `U+FEFF` is still reported but defaults to `LOW`; isolated characters in identifiers are `HIGH`; long runs are `CRITICAL`. |
 | `unicode/private-use` | `CRITICAL` for long runs, `HIGH` for short/medium runs and code-like token regions, `MEDIUM` in prose or data contexts. |
 | `unicode/payload` | `HIGH` for normal sequences, `CRITICAL` for long runs. |
 | `unicode/correlation` | Always `CRITICAL`. A payload near a decoder is the strongest signal. |
@@ -215,9 +215,17 @@ Severity is derived from four inputs, all computed from file content and path �
 | `unicode/directional-control` | `MEDIUM`. Directional marks are less dangerous than full bidi overrides. |
 | `unicode/combining-mark` | `MEDIUM`. Combining marks in token-like text are unusual but not as high-signal as invisible characters. |
 
-### Path Hint Downgrade
+### Low-Signal Invisible Handling
 
-Findings in test, fixture, localization, documentation, or vendor-like paths can be downgraded by one level. This applies only to isolated invisible-character findings that are not already `HIGH` or `CRITICAL` and are not in token-like regions. Bidi controls, long runs, and code-embedded findings are never downgraded by path hints.
+`U+FEFF` at byte offset `0` is treated as a normal file BOM and is not reported. Everywhere else, `U+FEFF` is still detected.
+
+ghostscan treats isolated and very short invisible-character findings differently from payload-like runs:
+
+- isolated invisible characters default to `LOW` unless they appear inside a token-like region or are elevated by nearby decode/execute markers
+- short runs in prose-like, comment-like, whitespace-like, and data-like contexts default to `LOW`
+- short runs in code-like strings or unknown regions stay visible and usually land at `MEDIUM`
+- token-like invisible findings remain `HIGH`
+- long invisible runs and payload findings stay strong regardless of surrounding file shape
 
 ## FAQ
 

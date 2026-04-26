@@ -150,6 +150,7 @@ func TestClassifyFindingRegion(t *testing.T) {
 		{name: "comment", shape: fileShapeCodeLike, content: "// comment\u200B text\n", line: 1, column: 11, want: regionCommentLike},
 		{name: "token", shape: fileShapeCodeLike, content: "const pa\u200Bss = 1;\n", line: 1, column: 9, want: regionTokenLike},
 		{name: "prose", shape: fileShapeProseLike, content: "This sentence contains a hidden,\u200B quiet mark for prose.\n", line: 1, column: 33, want: regionProseLike},
+		{name: "unknown", shape: fileShapeUnknown, content: "alpha \u200B omega\n", line: 1, column: 7, want: regionUnknown},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -174,16 +175,66 @@ func TestSeverityPolicy(t *testing.T) {
 		line    int
 		column  int
 		want    finding.Severity
+		message string
 	}{
-		{name: "isolated invisible prose low", path: "notes/readme", content: proseWith("quiet,\u200B hidden"), ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityLow},
-		{name: "isolated invisible token high", path: "src/app", content: "const pa\u200Bss = 1;\n", ruleID: detector.InvisibleRuleID, line: 1, column: 9, want: finding.SeverityHigh},
+		{name: "isolated invisible prose low", path: "notes/readme", content: proseWith("quiet,\u200B hidden"), ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityLow, message: "Isolated invisible Unicode character detected"},
+		{name: "isolated invisible token high", path: "src/app.go", content: "const pa\u200Bss = 1;\n", ruleID: detector.InvisibleRuleID, line: 1, column: 9, want: finding.SeverityHigh, message: "Isolated invisible Unicode character detected"},
+		{name: "isolated non-leading feff source low", path: "src/app.go", content: "package main\nvar label = \"a\uFEFFb\"\n", ruleID: detector.InvisibleRuleID, line: 2, column: 15, want: finding.SeverityLow, message: "Non-leading U+FEFF detected"},
+		{name: "isolated non-leading feff prose low", path: "notes/changelog.txt", content: proseWith("a \uFEFF hidden"), ruleID: detector.InvisibleRuleID, line: 1, column: 8, want: finding.SeverityLow, message: "Non-leading U+FEFF detected"},
+		{name: "short invisible run in data string low", path: "config/messages.txt", content: strings.Repeat("name: bonjour\n", 12) + "title: ok\u200B\u200B\n", ruleID: detector.InvisibleRuleID, line: 13, column: 10, want: finding.SeverityLow, message: "Short invisible Unicode sequence detected"},
+		{name: "short invisible run in source string medium", path: "src/app.go", content: codeLikePrefix() + "var label = \"a\u200B\u200Bb\"\n", ruleID: detector.InvisibleRuleID, line: 6, column: 15, want: finding.SeverityMedium, message: "Short invisible Unicode sequence detected"},
+		{name: "short invisible run in prose low", path: "docs/notes.txt", content: proseWith("a \u200B\u200B hidden"), ruleID: detector.InvisibleRuleID, line: 1, column: 8, want: finding.SeverityLow, message: "Short invisible Unicode sequence detected"},
+		{name: "short invisible run in token high", path: "src/app.go", content: "const pa\u200B\u200Bss = 1;\n", ruleID: detector.InvisibleRuleID, line: 1, column: 9, want: finding.SeverityHigh, message: "Short invisible Unicode sequence detected"},
+		{name: "short invisible run unknown medium", path: "misc/blob", content: "alpha \u200B\u200B omega\n", ruleID: detector.InvisibleRuleID, line: 1, column: 7, want: finding.SeverityMedium, message: "Short invisible Unicode sequence detected"},
 		{name: "bidi remains high in comments", path: "docs/comment", content: "// note \u202E hidden\n", ruleID: detector.BidiRuleID, line: 1, column: 9, want: finding.SeverityHigh},
-		{name: "long invisible run critical", path: "src/blob", content: "const x = \"" + strings.Repeat("\u200B", 16) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityCritical},
+		{name: "long invisible run critical", path: "src/blob.go", content: "const x = \"" + strings.Repeat("\u200B", 16) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityCritical, message: "Long invisible Unicode run suggests encoded payload"},
+		{name: "repeated feff run remains strong", path: "src/blob.go", content: "const x = \"" + strings.Repeat("\uFEFF", 6) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityHigh, message: "Repeated U+FEFF invisible sequence detected"},
 		{name: "isolated private use in data medium", path: "messages/catalog", content: strings.Repeat("key: value\n", 12) + "label: \uE000\n", ruleID: detector.PrivateUseRuleID, line: 13, column: 8, want: finding.SeverityMedium},
 		{name: "private use in token high", path: "src/app", content: codeLikePrefix() + "const icon\uE000Name = 1;\n", ruleID: detector.PrivateUseRuleID, line: 6, column: 11, want: finding.SeverityHigh},
 		{name: "short private use run high", path: "src/app", content: "const x = \"\uE000\uE001\";\n", ruleID: detector.PrivateUseRuleID, line: 1, column: 12, want: finding.SeverityHigh},
 		{name: "long private use run critical", path: "src/app", content: "const x = \"" + strings.Repeat("\uE000", 16) + "\";\n", ruleID: detector.PrivateUseRuleID, line: 1, column: 12, want: finding.SeverityCritical},
-		{name: "decoder proximity escalates", path: "src/app", content: "const pa\u200Bss = eval(x)\n", ruleID: detector.InvisibleRuleID, line: 1, column: 9, want: finding.SeverityCritical},
+		{name: "decoder proximity escalates", path: "src/app.go", content: codeLikePrefix() + "const pa\u200Bss = eval(x)\n", ruleID: detector.InvisibleRuleID, line: 6, column: 9, want: finding.SeverityCritical, message: "Isolated invisible Unicode character detected"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeNestedTempFile(t, tt.path, tt.content)
+			got, err := NewEngine().ScanFile(context.Background(), path)
+			if err != nil {
+				t.Fatalf("ScanFile() error = %v", err)
+			}
+			item, ok := findFindingAt(got, tt.ruleID, tt.line, tt.column)
+			if !ok {
+				t.Fatalf("finding %s at %d:%d not found in %#v", tt.ruleID, tt.line, tt.column, got)
+			}
+			if item.Severity != tt.want {
+				t.Fatalf("Severity = %q, want %q", item.Severity, tt.want)
+			}
+			if tt.message != "" && item.Message != tt.message {
+				t.Fatalf("Message = %q, want %q", item.Message, tt.message)
+			}
+		})
+	}
+}
+
+func TestContentAndRegionSeverityShapingOnlySoftensLowSignalInvisibleFindings(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		path    string
+		content string
+		ruleID  string
+		line    int
+		column  int
+		want    finding.Severity
+	}{
+		{name: "comment region softens isolated invisible", path: "src/sample.go", content: "// note a\u200Bb\n", ruleID: detector.InvisibleRuleID, line: 1, column: 10, want: finding.SeverityLow},
+		{name: "prose shape softens isolated invisible", path: "any/path", content: proseWith("a \u200B hidden"), ruleID: detector.InvisibleRuleID, line: 1, column: 8, want: finding.SeverityLow},
+		{name: "data shape softens isolated invisible", path: "any/path", content: strings.Repeat("name: value\n", 12) + "title: a\u200Bb\n", ruleID: detector.InvisibleRuleID, line: 13, column: 9, want: finding.SeverityLow},
+		{name: "content does not downgrade bidi", path: "src/sample.go", content: "// note a\u202Eb\n", ruleID: detector.BidiRuleID, line: 1, column: 10, want: finding.SeverityHigh},
+		{name: "content does not downgrade long run", path: "any/path", content: "const x = \"" + strings.Repeat("\u200B", 16) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityCritical},
 	}
 
 	for _, tt := range tests {
@@ -205,55 +256,18 @@ func TestSeverityPolicy(t *testing.T) {
 	}
 }
 
-func TestPathHintsDowngradeOnlyIsolatedInvisible(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		path    string
-		content string
-		ruleID  string
-		column  int
-		want    finding.Severity
-	}{
-		{name: "test path downgrades isolated invisible", path: "__tests__/sample", content: "const x = \"a\u200Bb\";\n", ruleID: detector.InvisibleRuleID, column: 13, want: finding.SeverityLow},
-		{name: "fixture path downgrades isolated invisible", path: "fixtures/sample", content: "const x = \"a\u200Bb\";\n", ruleID: detector.InvisibleRuleID, column: 13, want: finding.SeverityLow},
-		{name: "localization path downgrades isolated invisible", path: "locales/messages", content: "const x = \"a\u200Bb\";\n", ruleID: detector.InvisibleRuleID, column: 13, want: finding.SeverityLow},
-		{name: "path hint does not downgrade bidi", path: "__tests__/sample", content: "const x = \"a\u202Eb\";\n", ruleID: detector.BidiRuleID, column: 13, want: finding.SeverityHigh},
-		{name: "path hint does not downgrade long run", path: "__tests__/sample", content: "const x = \"" + strings.Repeat("\u200B", 16) + "\";\n", ruleID: detector.InvisibleRuleID, column: 12, want: finding.SeverityCritical},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			path := writeNestedTempFile(t, tt.path, tt.content)
-			got, err := NewEngine().ScanFile(context.Background(), path)
-			if err != nil {
-				t.Fatalf("ScanFile() error = %v", err)
-			}
-			item, ok := findFindingAt(got, tt.ruleID, 1, tt.column)
-			if !ok {
-				t.Fatalf("finding %s at 1:%d not found in %#v", tt.ruleID, tt.column, got)
-			}
-			if item.Severity != tt.want {
-				t.Fatalf("Severity = %q, want %q", item.Severity, tt.want)
-			}
-		})
-	}
-}
-
 func TestEndToEndClassificationRegressionShapes(t *testing.T) {
 	t.Parallel()
 
 	engine := NewEngine()
 	root := t.TempDir()
 	files := map[string]string{
-		"plain/bom.txt":            "\uFEFFplain text\n",
-		"tests/isolated_feff.txt":  "alpha \uFEFF beta\n",
-		"locales/messages/catalog": "name: hello\u200B\u200B\n",
-		"src/suspicious_payload":   "const blob = \"" + strings.Repeat("\u200B", 64) + "\";\nconst decoded = atob(blob);\neval(decoded);\n",
-		"src/order_check":          "const pa\u200Bss = 1;\n",
-		"docs/comment_with_bidi":   "// harmless words \u202E still high\n",
+		"plain/bom.txt":             "\uFEFFplain text\n",
+		"misc/isolated_feff.txt":    "alpha \uFEFF beta\n",
+		"data/messages.txt":         strings.Repeat("name: hello\n", 12) + "title: ok\u200B\u200B\n",
+		"src/suspicious_payload.go": "const blob = \"" + strings.Repeat("\u200B", 64) + "\";\nconst decoded = atob(blob);\neval(decoded);\n",
+		"src/order_check.go":        "const pa\u200Bss = 1;\n",
+		"docs/comment_with_bidi":    "// harmless words \u202E still high\n",
 	}
 	for name, content := range files {
 		fullPath := filepath.Join(root, filepath.FromSlash(name))
@@ -266,7 +280,7 @@ func TestEndToEndClassificationRegressionShapes(t *testing.T) {
 	}
 
 	var all []finding.Finding
-	for _, name := range []string{"plain/bom.txt", "tests/isolated_feff.txt", "locales/messages/catalog", "src/suspicious_payload", "src/order_check", "docs/comment_with_bidi"} {
+	for _, name := range []string{"plain/bom.txt", "misc/isolated_feff.txt", "data/messages.txt", "src/suspicious_payload.go", "src/order_check.go", "docs/comment_with_bidi"} {
 		got, err := engine.ScanFile(context.Background(), filepath.Join(root, filepath.FromSlash(name)))
 		if err != nil {
 			t.Fatalf("ScanFile(%s) error = %v", name, err)
@@ -279,10 +293,16 @@ func TestEndToEndClassificationRegressionShapes(t *testing.T) {
 		t.Fatal("file-start BOM was reported, want suppressed")
 	}
 	if item, ok := findFindingAt(all, detector.InvisibleRuleID, 1, 7); !ok || item.Severity != finding.SeverityLow {
-		t.Fatalf("isolated FEFF in test-like file = (%#v, %v), want LOW finding", item, ok)
+		t.Fatalf("isolated FEFF outside file-start = (%#v, %v), want LOW finding", item, ok)
 	}
-	if item, ok := findFindingAt(all, detector.InvisibleRuleID, 1, 12); !ok || item.Severity != finding.SeverityLow {
-		t.Fatalf("double ZWSP in localization-like data = (%#v, %v), want LOW finding", item, ok)
+	if item, ok := findFindingAt(all, detector.InvisibleRuleID, 1, 7); !ok || item.Message != "Non-leading U+FEFF detected" {
+		t.Fatalf("isolated FEFF outside file-start message = (%#v, %v), want non-leading FEFF message", item, ok)
+	}
+	if item, ok := findFindingAt(all, detector.InvisibleRuleID, 13, 10); !ok || item.Severity != finding.SeverityLow {
+		t.Fatalf("double ZWSP in data-like text = (%#v, %v), want LOW finding", item, ok)
+	}
+	if item, ok := findFindingAt(all, detector.InvisibleRuleID, 13, 10); !ok || item.Message != "Short invisible Unicode sequence detected" {
+		t.Fatalf("double ZWSP in data-like text message = (%#v, %v), want generic short-run message", item, ok)
 	}
 	if item, ok := findFindingAt(all, detector.PayloadRuleID, 1, 15); !ok || item.Severity != finding.SeverityCritical {
 		t.Fatalf("long payload near decoder = (%#v, %v), want CRITICAL payload", item, ok)
