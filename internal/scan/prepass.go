@@ -85,6 +85,8 @@ func detectDecoderMarkers(text string, observations []Observation) []Marker {
 		{kind: "decode", marker: "Buffer.from(", message: "Suspicious decoder or dynamic execution pattern detected: Buffer.from("},
 		{kind: "decode", marker: "atob(", message: "Suspicious decoder or dynamic execution pattern detected: atob("},
 		{kind: "decode", marker: "TextDecoder(", message: "Suspicious decoder or dynamic execution pattern detected: TextDecoder("},
+		{kind: "decode", marker: "decodeURIComponent(", message: "Suspicious decoder or dynamic execution pattern detected: decodeURIComponent("},
+		{kind: "decode", marker: "fromCharCode(", message: "Suspicious decoder or dynamic execution pattern detected: fromCharCode("},
 	}
 
 	for _, pattern := range patterns {
@@ -106,6 +108,7 @@ func detectDecoderMarkers(text string, observations []Observation) []Marker {
 	}
 
 	markers = append(markers, detectStringSetTimeoutMarkers(text, observations)...)
+	markers = append(markers, detectStringTimerMarkers(text, observations, "setInterval(")...)
 	sort.SliceStable(markers, func(i, j int) bool {
 		if markers[i].Line != markers[j].Line {
 			return markers[i].Line < markers[j].Line
@@ -119,11 +122,13 @@ func detectDecoderMarkers(text string, observations []Observation) []Marker {
 }
 
 func detectStringSetTimeoutMarkers(text string, observations []Observation) []Marker {
-	const marker = "setTimeout("
+	return detectStringTimerMarkers(text, observations, "setTimeout(")
+}
 
+func detectStringTimerMarkers(text string, observations []Observation, marker string) []Marker {
 	findings := make([]Marker, 0)
 	for _, offset := range findAllOffsets(text, marker) {
-		quotedArgument, ok := extractQuotedSetTimeoutArgument(text[offset:])
+		quotedArgument, ok := extractQuotedTimerArgument(text[offset:], marker)
 		if !ok {
 			continue
 		}
@@ -136,7 +141,7 @@ func detectStringSetTimeoutMarkers(text string, observations []Observation) []Ma
 		findings = append(findings, Marker{
 			Kind:     "dynamic-exec",
 			Marker:   marker,
-			Message:  "Suspicious decoder or dynamic execution pattern detected: setTimeout() with string argument",
+			Message:  "Suspicious decoder or dynamic execution pattern detected: " + strings.TrimSuffix(marker, "(") + "() with string argument",
 			Line:     observation.Line,
 			Column:   observation.Column,
 			Offset:   offset,
@@ -148,8 +153,10 @@ func detectStringSetTimeoutMarkers(text string, observations []Observation) []Ma
 }
 
 func extractQuotedSetTimeoutArgument(text string) (string, bool) {
-	const marker = "setTimeout("
+	return extractQuotedTimerArgument(text, "setTimeout(")
+}
 
+func extractQuotedTimerArgument(text, marker string) (string, bool) {
 	start := len(marker)
 	for start < len(text) && isASCIIWhitespace(text[start]) {
 		start++

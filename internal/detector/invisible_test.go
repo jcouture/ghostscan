@@ -78,6 +78,25 @@ func TestInvisibleDetectSkipsEmojiZWJSequence(t *testing.T) {
 	}
 }
 
+func TestInvisibleDetectSkipsLeadingBOMButKeepsNonLeadingFEFF(t *testing.T) {
+	t.Parallel()
+
+	findings := NewInvisible().Detect(File{
+		Path: "testdata/invisible/feff.txt",
+		Observations: []Observation{
+			{Rune: '\uFEFF', ByteOffset: 0, Line: 1, Column: 1},
+			{Rune: 'A', ByteOffset: 3, Line: 1, Column: 2},
+			{Rune: '\uFEFF', ByteOffset: 4, Line: 1, Column: 3},
+			{Rune: '\uFEFF', ByteOffset: 7, Line: 1, Column: 4},
+		},
+	})
+	if len(findings) != 1 {
+		t.Fatalf("len(findings) = %d, want 1", len(findings))
+	}
+
+	assertFinding(t, findings[0], "testdata/invisible/feff.txt", 1, 3, "<U+FEFF ZERO WIDTH NO-BREAK SPACE><U+FEFF ZERO WIDTH NO-BREAK SPACE>")
+}
+
 func assertFinding(t *testing.T, got finding.Finding, wantPath string, wantLine, wantColumn int, wantEvidence string) {
 	t.Helper()
 

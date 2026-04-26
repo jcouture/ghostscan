@@ -106,6 +106,10 @@ func groupInvisibleObservations(observations []Observation, runes []rune) []obse
 	}
 
 	for index, observation := range observations {
+		if observation.ByteOffset == 0 && observation.Rune == '\uFEFF' {
+			flush(index)
+			continue
+		}
 		if !unicodeutil.IsInvisible(observation.Rune) || unicodeutil.IsValidEmojiZWJSequence(runes, index) {
 			flush(index)
 			continue

@@ -69,6 +69,7 @@ type JSONFinding struct {
 	Column     int             `json:"column"`
 	EndLine    int             `json:"end_line,omitempty"`
 	EndColumn  int             `json:"end_column,omitempty"`
+	Severity   string          `json:"severity,omitempty"`
 	Message    string          `json:"message"`
 	Evidence   string          `json:"evidence"`
 	Category   string          `json:"category,omitempty"`
@@ -165,6 +166,7 @@ func jsonFindings(findings []renderedFinding) []JSONFinding {
 			Column:     item.Column,
 			EndLine:    item.EndLine,
 			EndColumn:  item.EndColumn,
+			Severity:   string(item.Severity),
 			Message:    item.Message,
 			Evidence:   item.Evidence,
 			Category:   categoryForRule(item.RuleID),

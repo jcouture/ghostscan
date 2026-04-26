@@ -129,6 +129,7 @@ type renderedFinding struct {
 	Column      int
 	EndLine     int
 	EndColumn   int
+	Severity    finding.Severity
 	Evidence    string
 	Context     string
 	Character   string
@@ -416,6 +417,7 @@ func newCorrelationFinding(item finding.Finding) renderedFinding {
 		Column:      item.Column,
 		EndLine:     item.EndLine,
 		EndColumn:   item.EndColumn,
+		Severity:    item.Severity,
 		Evidence:    payloadEvidence,
 		Context:     unicodeutil.RenderText(item.Context),
 		Count:       suspiciousRuneCount(payloadEvidence),
@@ -450,6 +452,7 @@ func newRenderedFinding(item finding.Finding) renderedFinding {
 		Column:      item.Column,
 		EndLine:     item.EndLine,
 		EndColumn:   item.EndColumn,
+		Severity:    item.Severity,
 		Evidence:    unicodeutil.RenderText(item.Evidence),
 		Context:     unicodeutil.RenderText(item.Context),
 		Fingerprint: fingerprint(item),
@@ -697,6 +700,11 @@ func (r *HumanReporter) writeVerboseFinding(item renderedFinding) error {
 	}
 	if err := r.writeField("RuleID", item.RuleID); err != nil {
 		return err
+	}
+	if item.Severity != "" {
+		if err := r.writeField("Severity", string(item.Severity)); err != nil {
+			return err
+		}
 	}
 	if err := r.writeField("File", item.Path); err != nil {
 		return err
