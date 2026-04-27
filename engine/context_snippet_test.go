@@ -18,49 +18,47 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package scan
+package engine
 
 import (
-	"context"
-	"errors"
+	"strings"
 	"testing"
 )
 
-func TestScanTrustedTextAllowsBinaryContent(t *testing.T) {
+func TestBuildFindingContextRendersHiddenRunes(t *testing.T) {
 	t.Parallel()
 
-	path := fixturePath("binary", "contains_nul.bin")
-
-	raw, err := NewEngine().ScanTrustedTextRaw(context.Background(), path)
-	if err != nil {
-		t.Fatalf("ScanTrustedTextRaw() error = %v", err)
-	}
-	if len(raw.Observations) == 0 {
-		t.Fatal("ScanTrustedTextRaw() observations = 0, want scanned content")
+	content := []byte("const x = \"A\u200BB\"\n")
+	ctx := &Context{
+		Content:    content,
+		LineStarts: buildLineStarts(content),
 	}
 
-	result, err := NewEngine().ScanTrustedTextFileDetailed(context.Background(), path)
-	if err != nil {
-		t.Fatalf("ScanTrustedTextFileDetailed() error = %v", err)
-	}
-	if result.Bytes == 0 {
-		t.Fatalf("ScanTrustedTextFileDetailed() bytes = %d, want > 0", result.Bytes)
-	}
-
-	direct, err := scanTrustedTextFile(context.Background(), path)
-	if err != nil {
-		t.Fatalf("scanTrustedTextFile() error = %v", err)
-	}
-	if len(direct.Observations) == 0 {
-		t.Fatal("scanTrustedTextFile() observations = 0, want scanned content")
+	got := buildFindingContext(ctx, 1, 13)
+	want := "const x = \"A<U+200B ZERO WIDTH SPACE>B\""
+	if got != want {
+		t.Fatalf("buildFindingContext() = %q, want %q", got, want)
 	}
 }
 
-func TestScanFileRejectsBinaryContent(t *testing.T) {
+func TestBuildFindingContextClipsLongLines(t *testing.T) {
 	t.Parallel()
 
-	_, err := scanFile(context.Background(), fixturePath("binary", "contains_nul.bin"))
-	if !errors.Is(err, ErrBinaryContent) {
-		t.Fatalf("scanFile() error = %v, want ErrBinaryContent", err)
+	line := strings.Repeat("a", 30) + "\u200B" + strings.Repeat("b", 30) + "\n"
+	content := []byte(line)
+	ctx := &Context{
+		Content:    content,
+		LineStarts: buildLineStarts(content),
+	}
+
+	got := buildFindingContext(ctx, 1, 31)
+	if !strings.HasPrefix(got, "...") {
+		t.Fatalf("buildFindingContext() = %q, want clipped prefix", got)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("buildFindingContext() = %q, want clipped suffix", got)
+	}
+	if !strings.Contains(got, "<U+200B ZERO WIDTH SPACE>") {
+		t.Fatalf("buildFindingContext() = %q, want rendered hidden rune", got)
 	}
 }

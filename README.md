@@ -79,6 +79,37 @@ ghostscan --version
 
 You should see `ghostscan dev (commit none)` from a plain source build, or a real tag and commit in a release build.
 
+## Reusable Engine
+
+Projects that want structured findings without invoking the CLI can import the public engine package directly:
+
+```go
+import (
+  "context"
+
+  "github.com/jcouture/ghostscan/engine"
+)
+
+scanner := engine.New(engine.Options{})
+result, err := scanner.ScanBytesDetailed(context.Background(), "blob.js", data)
+if err != nil {
+  return err
+}
+
+for _, item := range result.Findings {
+  // consume structured findings
+}
+```
+
+The public engine supports:
+
+- `ScanFile` for local files
+- `ScanBytes` for in-memory blobs
+- `ScanString` for string content
+- deterministic `Finding` ordering through `engine.SortFindings`
+
+The CLI remains the owner of repository walking, excludes, size limits, output formatting, and exit codes.
+
 ## Usage
 
 ```text

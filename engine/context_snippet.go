@@ -18,19 +18,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package scan
+package engine
 
 import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
 
 const contextSnippetRadius = 20
 
-func enrichFindingContexts(fileContext *Context, findings []finding.Finding) {
+func enrichFindingContexts(fileContext *Context, findings []Finding) {
 	for index := range findings {
 		findings[index].Context = buildFindingContext(fileContext, findings[index].Line, findings[index].Column)
 	}

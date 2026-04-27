@@ -30,10 +30,10 @@ import (
 	"time"
 
 	"github.com/h2non/filetype"
+	"github.com/jcouture/ghostscan/engine"
 	"github.com/jcouture/ghostscan/internal/filesystem"
 	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/report"
-	"github.com/jcouture/ghostscan/internal/scan"
 )
 
 type Options struct {
@@ -150,9 +150,9 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	walkCompleted := now()
 	walkDuration := walkCompleted.Sub(walkStart)
 
-	engine := scan.NewEngine()
+	scanner := engine.New(engine.Options{})
 	scanStart := walkCompleted
-	results, scanErrors := scanCandidates(ctx, engine, discovery.Candidates)
+	results, scanErrors := scanCandidates(ctx, scanner, discovery.Candidates)
 	scanCompleted := now()
 	scanDuration := scanCompleted.Sub(scanStart)
 
@@ -214,7 +214,7 @@ func buildExcludeReporter(w io.Writer, verbose bool) func(path, pattern string) 
 	}
 }
 
-func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([]fileScanResult, []scanError) {
+func scanCandidates(ctx context.Context, scanner *engine.Engine, paths []string) ([]fileScanResult, []scanError) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -233,7 +233,7 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 		go func() {
 			for job := range jobs {
 				// Per-file scans stay boring; workerCount is capped above on purpose.
-				result, err := engine.ScanTrustedTextFileDetailed(ctx, job.path)
+				result, err := scanner.ScanFileDetailed(ctx, job.path)
 				results <- fileScanResult{
 					path:     job.path,
 					findings: result.Findings,
@@ -263,7 +263,7 @@ func scanCandidates(ctx context.Context, engine *scan.Engine, paths []string) ([
 			return completed, append(scanErrors, scanError{err: ctx.Err()})
 		case result := <-results:
 			if result.err != nil {
-				if errors.Is(result.err, scan.ErrBinaryContent) {
+				if errors.Is(result.err, engine.ErrBinaryContent) {
 					scanErrors = append(scanErrors, scanError{path: result.path, err: fmt.Errorf("scan discovered file %q: %w", result.path, result.err)})
 					continue
 				}
