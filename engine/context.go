@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package scan
+package engine
 
 import "github.com/jcouture/ghostscan/internal/detector"
 
@@ -33,7 +33,5 @@ type Context struct {
 }
 
 type Observation = detector.Observation
-
 type Prepass = detector.Prepass
-
 type Marker = detector.DecoderMarker

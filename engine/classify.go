@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package scan
+package engine
 
 import (
 	"strings"
@@ -26,7 +26,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jcouture/ghostscan/internal/detector"
-	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
 
@@ -60,7 +59,7 @@ type invisibleTraits struct {
 	onlyFEFF bool
 }
 
-func classifyAndFilterFindings(fileContext *Context, findings []finding.Finding) []finding.Finding {
+func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Finding {
 	if len(findings) == 0 {
 		return findings
 	}
@@ -82,7 +81,7 @@ func classifyAndFilterFindings(fileContext *Context, findings []finding.Finding)
 	return filtered
 }
 
-func isSuppressedFileStartBOM(fileContext *Context, item finding.Finding) bool {
+func isSuppressedFileStartBOM(fileContext *Context, item Finding) bool {
 	if item.RuleID != detector.InvisibleRuleID || item.Line != 1 || item.Column != 1 {
 		return false
 	}
@@ -93,14 +92,14 @@ func isSuppressedFileStartBOM(fileContext *Context, item finding.Finding) bool {
 	return first.ByteOffset == 0 && first.Rune == '\uFEFF' && suspiciousRuneCountForFinding(item) == 1
 }
 
-func classifyFindingSeverity(fileContext *Context, classification fileClassification, item finding.Finding) finding.Severity {
+func classifyFindingSeverity(fileContext *Context, classification fileClassification, item Finding) Severity {
 	region := classifyFindingRegion(fileContext, classification.shape, item)
 	profile := classifySequenceProfile(suspiciousRuneCountForFinding(item))
 
-	var severity finding.Severity
+	var severity Severity
 	switch item.RuleID {
 	case detector.BidiRuleID:
-		return finding.SeverityHigh
+		return SeverityHigh
 	case detector.PrivateUseRuleID:
 		severity = privateUseSeverity(classification.shape, region, profile)
 	case detector.InvisibleRuleID:
@@ -108,7 +107,7 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 	case detector.PayloadRuleID:
 		severity = payloadSeverity(profile)
 	case detector.CorrelationRuleID:
-		severity = finding.SeverityCritical
+		severity = SeverityCritical
 	default:
 		severity = defaultSeverity(item.RuleID)
 	}
@@ -119,7 +118,7 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 	return severity
 }
 
-func classifyFindingMessage(classification fileClassification, item finding.Finding) string {
+func classifyFindingMessage(classification fileClassification, item Finding) string {
 	if item.RuleID != detector.InvisibleRuleID {
 		return item.Message
 	}
@@ -143,79 +142,79 @@ func classifyFindingMessage(classification fileClassification, item finding.Find
 	}
 }
 
-func privateUseSeverity(shape, region, profile string) finding.Severity {
+func privateUseSeverity(shape, region, profile string) Severity {
 	switch profile {
 	case sequenceLongRun, sequenceVeryLongRun:
-		return finding.SeverityCritical
+		return SeverityCritical
 	case sequenceShortRun, sequenceMediumRun:
-		return finding.SeverityHigh
+		return SeverityHigh
 	}
 	if shape == fileShapeCodeLike && region == regionTokenLike {
-		return finding.SeverityHigh
+		return SeverityHigh
 	}
 	if shape == fileShapeProseLike || shape == fileShapeDataLike {
-		return finding.SeverityMedium
+		return SeverityMedium
 	}
-	return finding.SeverityHigh
+	return SeverityHigh
 }
 
-func invisibleSeverity(classification fileClassification, region, profile string, traits invisibleTraits) finding.Severity {
+func invisibleSeverity(classification fileClassification, region, profile string, traits invisibleTraits) Severity {
 	switch profile {
 	case sequenceLongRun, sequenceVeryLongRun:
-		return finding.SeverityCritical
+		return SeverityCritical
 	case sequenceMediumRun:
-		return finding.SeverityHigh
+		return SeverityHigh
 	case sequenceShortRun:
 		if region == regionTokenLike {
-			return finding.SeverityHigh
+			return SeverityHigh
 		}
 		if region == regionCommentLike || region == regionWhitespaceLike || region == regionProseLike {
-			return finding.SeverityLow
+			return SeverityLow
 		}
 		if classification.shape == fileShapeProseLike || classification.shape == fileShapeDataLike {
-			return finding.SeverityLow
+			return SeverityLow
 		}
 		if classification.shape == fileShapeCodeLike || region == regionStringLike {
-			return finding.SeverityMedium
+			return SeverityMedium
 		}
-		return finding.SeverityMedium
+		return SeverityMedium
 	}
 
 	switch {
 	case region == regionTokenLike:
-		return finding.SeverityHigh
+		return SeverityHigh
 	case traits.onlyFEFF:
-		return finding.SeverityLow
+		return SeverityLow
 	case classification.shape == fileShapeProseLike || region == regionCommentLike || region == regionWhitespaceLike:
-		return finding.SeverityLow
+		return SeverityLow
 	case region == regionStringLike && classification.shape == fileShapeDataLike:
-		return finding.SeverityLow
+		return SeverityLow
 	default:
-		return finding.SeverityLow
+		return SeverityLow
 	}
 }
 
-func payloadSeverity(profile string) finding.Severity {
+func payloadSeverity(profile string) Severity {
 	switch profile {
 	case sequenceLongRun, sequenceVeryLongRun:
-		return finding.SeverityCritical
+		return SeverityCritical
 	default:
-		return finding.SeverityHigh
+		return SeverityHigh
 	}
 }
 
-func defaultSeverity(ruleID string) finding.Severity {
+func defaultSeverity(ruleID string) Severity {
 	switch ruleID {
 	case detector.ControlRuleID, detector.CombiningMarkRuleID:
-		return finding.SeverityMedium
+		return SeverityMedium
 	case detector.MixedScriptRuleID:
-		return finding.SeverityHigh
+		return SeverityHigh
 	default:
-		return finding.SeverityMedium
+		return SeverityMedium
 	}
 }
 
-func applyDecoderProximity(severity finding.Severity, markers []Marker, item finding.Finding) finding.Severity {
+func applyDecoderProximity(severity Severity, markers []Marker, item Finding) Severity {
 	if len(markers) == 0 {
 		return severity
 	}
@@ -229,7 +228,7 @@ func applyDecoderProximity(severity finding.Severity, markers []Marker, item fin
 	switch {
 	case bestDistance == 0 || bestDistance <= 5:
 		return upgradeSeverity(severity)
-	case bestDistance <= 20 && severity == finding.SeverityHigh:
+	case bestDistance <= 20 && severity == SeverityHigh:
 		return upgradeSeverity(severity)
 	default:
 		return severity
@@ -243,16 +242,16 @@ func findingLineDistance(left, right int) int {
 	return right - left
 }
 
-func upgradeSeverity(severity finding.Severity) finding.Severity {
+func upgradeSeverity(severity Severity) Severity {
 	switch severity {
-	case finding.SeverityLow:
-		return finding.SeverityMedium
-	case finding.SeverityMedium:
-		return finding.SeverityHigh
-	case finding.SeverityHigh:
-		return finding.SeverityCritical
+	case SeverityLow:
+		return SeverityMedium
+	case SeverityMedium:
+		return SeverityHigh
+	case SeverityHigh:
+		return SeverityCritical
 	default:
-		return finding.SeverityCritical
+		return SeverityCritical
 	}
 }
 
@@ -271,7 +270,7 @@ func classifySequenceProfile(count int) string {
 	}
 }
 
-func suspiciousRuneCountForFinding(item finding.Finding) int {
+func suspiciousRuneCountForFinding(item Finding) int {
 	count := strings.Count(item.Evidence, "<U+")
 	if count == 0 {
 		return 1
@@ -279,7 +278,7 @@ func suspiciousRuneCountForFinding(item finding.Finding) int {
 	return count
 }
 
-func invisibleTraitsForFinding(item finding.Finding) invisibleTraits {
+func invisibleTraitsForFinding(item Finding) invisibleTraits {
 	count := suspiciousRuneCountForFinding(item)
 	hasFEFF := strings.Contains(item.Evidence, "<U+FEFF ")
 	return invisibleTraits{
@@ -472,7 +471,7 @@ func naturalWordCount(text string) int {
 	return count
 }
 
-func classifyFindingRegion(fileContext *Context, shape string, item finding.Finding) string {
+func classifyFindingRegion(fileContext *Context, shape string, item Finding) string {
 	observation, ok := observationForFinding(fileContext, item)
 	if !ok {
 		return regionUnknown
@@ -503,7 +502,7 @@ func classifyFindingRegion(fileContext *Context, shape string, item finding.Find
 	return regionUnknown
 }
 
-func observationForFinding(fileContext *Context, item finding.Finding) (Observation, bool) {
+func observationForFinding(fileContext *Context, item Finding) (Observation, bool) {
 	for _, observation := range fileContext.Observations {
 		if observation.Line == item.Line && observation.Column == item.Column {
 			return observation, true

@@ -18,18 +18,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package scan
+package engine
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"unicode/utf8"
 )
-
-var ErrBinaryContent = errors.New("binary file content contains NUL byte")
 
 func scanFile(ctx context.Context, path string) (*Context, error) {
 	return scanFileWithBinaryCheck(ctx, path, true)
@@ -50,6 +47,10 @@ func scanFileWithBinaryCheck(ctx context.Context, path string, checkBinary bool)
 	if err != nil {
 		return nil, fmt.Errorf("read file %q: %w", path, err)
 	}
+	return scanContentWithBinaryCheck(ctx, path, content, checkBinary)
+}
+
+func scanContentWithBinaryCheck(ctx context.Context, path string, content []byte, checkBinary bool) (*Context, error) {
 	if checkBinary && bytes.IndexByte(content, 0) >= 0 {
 		return nil, ErrBinaryContent
 	}
@@ -83,8 +84,6 @@ func scanFileWithBinaryCheck(ctx context.Context, path string, checkBinary bool)
 			Width:      width,
 		})
 
-		// Invalid UTF-8 is represented explicitly as RuneError with width 1 so
-		// the original bad byte still occupies one scan position.
 		if r == '\n' {
 			line++
 			column = 1
