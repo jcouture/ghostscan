@@ -59,7 +59,7 @@ func (MixedScript) Detect(file File) []finding.Finding {
 	}
 
 	for index, observation := range file.Observations {
-		if isTokenRune(observation.Rune) {
+		if isIdentRune(observation.Rune) {
 			if tokenStart == -1 {
 				tokenStart = index
 			}
@@ -117,7 +117,8 @@ func detectMixedScriptToken(path string, token []Observation) (finding.Finding, 
 	}, true
 }
 
-func isTokenRune(r rune) bool {
+// isIdentRune matches identifier characters including $ for JavaScript/PHP.
+func isIdentRune(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '$'
 }
 

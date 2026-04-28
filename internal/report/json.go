@@ -247,6 +247,12 @@ func categoryForRule(ruleID string) string {
 		return "payload"
 	case "unicode/correlation":
 		return "correlation"
+	case "unicode/directional-control":
+		return "directional_control"
+	case "unicode/mixed-script":
+		return "mixed_script"
+	case "unicode/combining-mark":
+		return "combining_mark"
 	default:
 		return ""
 	}

@@ -52,45 +52,6 @@ func (w *nthFailWriter) Write(p []byte) (int, error) {
 var _ io.Writer = errorWriter{}
 var _ io.Writer = &nthFailWriter{}
 
-// --- less ---
-
-func TestLess(t *testing.T) {
-	t.Parallel()
-
-	base := finding.Finding{Path: "f.go", Line: 5, Column: 3, RuleID: "unicode/invisible", Message: "A"}
-
-	// Different line
-	f2 := base
-	f2.Line = 10
-	if !less(base, f2) {
-		t.Fatal("less(line 5, line 10) = false, want true")
-	}
-	if less(f2, base) {
-		t.Fatal("less(line 10, line 5) = true, want false")
-	}
-
-	// Same line, different column
-	sameLineDiffCol := base
-	sameLineDiffCol.Column = 8
-	if !less(base, sameLineDiffCol) {
-		t.Fatal("less(col 3, col 8) = false, want true")
-	}
-
-	// Same line, same column, different ruleID
-	sameLineColDiffRule := base
-	sameLineColDiffRule.RuleID = "unicode/private-use"
-	if !less(base, sameLineColDiffRule) {
-		t.Fatal("less(invisible, private-use) = false, want true (alpha order)")
-	}
-
-	// Same line, column, ruleID, different message
-	sameAll := base
-	sameAll.Message = "Z"
-	if !less(base, sameAll) {
-		t.Fatal("less(msg A, msg Z) = false, want true")
-	}
-}
-
 // --- titleCase ---
 
 func TestTitleCaseEmpty(t *testing.T) {
@@ -122,19 +83,6 @@ func TestGroupRenderedFindingsEmpty(t *testing.T) {
 	got = groupRenderedFindings([]renderedFinding{})
 	if got != nil {
 		t.Fatalf("groupRenderedFindings([]) = %v, want nil", got)
-	}
-}
-
-// --- lineDistance in human.go ---
-
-func TestHumanLineDistance(t *testing.T) {
-	t.Parallel()
-
-	if got := lineDistance(3, 10); got != 7 {
-		t.Fatalf("lineDistance(3, 10) = %d, want 7", got)
-	}
-	if got := lineDistance(10, 3); got != 7 {
-		t.Fatalf("lineDistance(10, 3) = %d, want 7", got)
 	}
 }
 

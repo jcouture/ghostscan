@@ -110,14 +110,14 @@ func TestCorrelationPlural(t *testing.T) {
 func TestLineDistance(t *testing.T) {
 	t.Parallel()
 
-	if got := lineDistance(10, 3); got != 7 {
-		t.Fatalf("lineDistance(10, 3) = %d, want 7", got)
+	if got := finding.LineDistance(10, 3); got != 7 {
+		t.Fatalf("LineDistance(10, 3) = %d, want 7", got)
 	}
-	if got := lineDistance(3, 10); got != 7 {
-		t.Fatalf("lineDistance(3, 10) = %d, want 7", got)
+	if got := finding.LineDistance(3, 10); got != 7 {
+		t.Fatalf("LineDistance(3, 10) = %d, want 7", got)
 	}
-	if got := lineDistance(5, 5); got != 0 {
-		t.Fatalf("lineDistance(5, 5) = %d, want 0", got)
+	if got := finding.LineDistance(5, 5); got != 0 {
+		t.Fatalf("LineDistance(5, 5) = %d, want 0", got)
 	}
 }
 

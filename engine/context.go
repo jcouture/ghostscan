@@ -22,6 +22,9 @@ package engine
 
 import "github.com/jcouture/ghostscan/internal/detector"
 
+// Context holds the raw scan state for a single file before classification.
+// It is returned by [Engine.ScanRaw] and [Engine.ScanTrustedTextRaw] for
+// callers that need direct access to observations and line geometry.
 type Context struct {
 	Path         string
 	Content      []byte
@@ -32,6 +35,14 @@ type Context struct {
 	Prepass      Prepass
 }
 
+// Observation records a single suspicious Unicode code point found during
+// detection, before it is grouped into a [Finding].
 type Observation = detector.Observation
+
+// Prepass holds the result of the fast pre-scan phase that determines which
+// detectors need to run on a given file.
 type Prepass = detector.Prepass
+
+// Marker records a decoder-like pattern (e.g., base64/hex decode call) whose
+// proximity to findings may elevate severity.
 type Marker = detector.DecoderMarker

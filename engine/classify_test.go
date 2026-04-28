@@ -157,7 +157,7 @@ func TestClassifyFindingRegion(t *testing.T) {
 			t.Parallel()
 			ctx := scanTextForTest(t, tt.content)
 			item := finding.Finding{Path: ctx.Path, Line: tt.line, Column: tt.column, RuleID: detector.InvisibleRuleID, Evidence: "<U+200B ZERO WIDTH SPACE>"}
-			if got := classifyFindingRegion(ctx, tt.shape, item); got != tt.want {
+			if got := classifyFindingRegion(ctx, tt.shape, buildObservationIndex(ctx.Observations), item); got != tt.want {
 				t.Fatalf("region = %q, want %q", got, tt.want)
 			}
 		})

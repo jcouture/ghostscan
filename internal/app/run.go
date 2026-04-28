@@ -22,7 +22,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -263,10 +262,6 @@ func scanCandidates(ctx context.Context, scanner *engine.Engine, paths []string)
 			return completed, append(scanErrors, scanError{err: ctx.Err()})
 		case result := <-results:
 			if result.err != nil {
-				if errors.Is(result.err, engine.ErrBinaryContent) {
-					scanErrors = append(scanErrors, scanError{path: result.path, err: fmt.Errorf("scan discovered file %q: %w", result.path, result.err)})
-					continue
-				}
 				scanErrors = append(scanErrors, scanError{path: result.path, err: fmt.Errorf("scan discovered file %q: %w", result.path, result.err)})
 				continue
 			}
