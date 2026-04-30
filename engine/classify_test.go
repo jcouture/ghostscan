@@ -186,6 +186,7 @@ func TestSeverityPolicy(t *testing.T) {
 		{name: "short invisible run in prose low", path: "docs/notes.txt", content: proseWith("a \u200B\u200B hidden"), ruleID: detector.InvisibleRuleID, line: 1, column: 8, want: finding.SeverityLow, message: "Short invisible Unicode sequence detected"},
 		{name: "short invisible run in token high", path: "src/app.go", content: "const pa\u200B\u200Bss = 1;\n", ruleID: detector.InvisibleRuleID, line: 1, column: 9, want: finding.SeverityHigh, message: "Short invisible Unicode sequence detected"},
 		{name: "short invisible run unknown medium", path: "misc/blob", content: "alpha \u200B\u200B omega\n", ruleID: detector.InvisibleRuleID, line: 1, column: 7, want: finding.SeverityMedium, message: "Short invisible Unicode sequence detected"},
+		{name: "short invisible run in locale data low", path: "config/locales/fr.yml", content: strings.Repeat("title: bonjour\n", 12) + "subtitle: a\u200B\u200Bb\n", ruleID: detector.InvisibleRuleID, line: 13, column: 12, want: finding.SeverityLow, message: "Short invisible Unicode sequence detected"},
 		{name: "bidi remains high in comments", path: "docs/comment", content: "// note \u202E hidden\n", ruleID: detector.BidiRuleID, line: 1, column: 9, want: finding.SeverityHigh},
 		{name: "long invisible run critical", path: "src/blob.go", content: "const x = \"" + strings.Repeat("\u200B", 16) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityCritical, message: "Long invisible Unicode run suggests encoded payload"},
 		{name: "repeated feff run remains strong", path: "src/blob.go", content: "const x = \"" + strings.Repeat("\uFEFF", 6) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityHigh, message: "Repeated U+FEFF invisible sequence detected"},
@@ -246,6 +247,91 @@ func TestContentAndRegionSeverityShapingOnlySoftensLowSignalInvisibleFindings(t 
 				t.Fatalf("ScanFile() error = %v", err)
 			}
 			item, ok := findFindingAt(got, tt.ruleID, tt.line, tt.column)
+			if !ok {
+				t.Fatalf("finding %s at %d:%d not found in %#v", tt.ruleID, tt.line, tt.column, got)
+			}
+			if item.Severity != tt.want {
+				t.Fatalf("Severity = %q, want %q", item.Severity, tt.want)
+			}
+		})
+	}
+}
+
+func TestLowSignalInvisibleSuppressionNeedsMultipleBenignSignals(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     string
+		content  string
+		ruleID   string
+		line     int
+		column   int
+		wantGone bool
+		want     finding.Severity
+	}{
+		{
+			name:     "test fixture string is suppressed",
+			path:     "lib/example_test.exs",
+			content:  "assert value == \"a\uFEFFb\"\n",
+			ruleID:   detector.InvisibleRuleID,
+			line:     1,
+			column:   19,
+			wantGone: true,
+		},
+		{
+			name:    "test fixture token remains high",
+			path:    "src/example_test.go",
+			content: "const pa\u200Bss = 1\n",
+			ruleID:  detector.InvisibleRuleID,
+			line:    1,
+			column:  9,
+			want:    finding.SeverityHigh,
+		},
+		{
+			name:    "test fixture long run remains critical",
+			path:    "tests/payload_test.sh",
+			content: "blob=\"" + strings.Repeat("\u200B", 16) + "\"\n",
+			ruleID:  detector.InvisibleRuleID,
+			line:    1,
+			column:  7,
+			want:    finding.SeverityCritical,
+		},
+		{
+			name:    "build release file does not soften",
+			path:    "scripts/release.sh",
+			content: "printf 'a\u200B\u200Bb'\n",
+			ruleID:  detector.InvisibleRuleID,
+			line:    1,
+			column:  10,
+			want:    finding.SeverityMedium,
+		},
+		{
+			name:    "test fixture near eval does not suppress",
+			path:    "tests/fixture_test.js",
+			content: "const s = \"a\u200B\u200Bb\"; eval(s)\n",
+			ruleID:  detector.InvisibleRuleID,
+			line:    1,
+			column:  13,
+			want:    finding.SeverityMedium,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeNestedTempFile(t, tt.path, tt.content)
+			got, err := NewEngine().ScanFile(context.Background(), path)
+			if err != nil {
+				t.Fatalf("ScanFile() error = %v", err)
+			}
+			item, ok := findFindingAt(got, tt.ruleID, tt.line, tt.column)
+			if tt.wantGone {
+				if ok {
+					t.Fatalf("finding = %#v, want suppressed", item)
+				}
+				return
+			}
 			if !ok {
 				t.Fatalf("finding %s at %d:%d not found in %#v", tt.ruleID, tt.line, tt.column, got)
 			}

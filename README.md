@@ -47,7 +47,7 @@ Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/in
 - **Visible evidence for invisible content**: Renders hidden Unicode as strings like `<U+200B ZERO WIDTH SPACE>`.
 - **Focused Unicode threat coverage**: Detects invisible characters, private-use Unicode, bidi controls, directional marks, mixed-script tokens, and combining marks.
 - **Payload-aware heuristics**: Flags long hidden sequences, dense suspicious regions, and explicit payload-plus-decoder correlations while keeping standalone decoder noise out of default results.
-- **Context-aware severity**: Uses bounded content-based file shape checks, file-kind classification, local finding region checks, and decoder proximity to reduce low-value invisible-character noise without downgrading bidi controls or long suspicious runs.
+- **Context-aware severity**: Uses bounded content-based file shape checks, conservative file-role hints, local finding region checks, and decoder proximity to reduce low-value invisible-character noise without downgrading bidi controls, long suspicious runs, or build and release contexts.
 - **Noise reduction for asset contexts**: Suppresses obvious private-use glyph mappings in font-like SVG assets so icon fonts do not dominate the report.
 - **Safe repository traversal**: Skips symlinks, binary files, oversize files, and common dependency or build directories.
 - **CI-friendly behavior**: Uses deterministic ordering, human or JSON output, and exit codes `0`, `1`, and `2`.
@@ -223,22 +223,24 @@ Every finding is assigned one of four severity levels: `LOW`, `MEDIUM`, `HIGH`, 
 
 ### How Severity Is Computed
 
-Severity is derived from four inputs, all computed from file content and local context:
+Severity is derived from five inputs, all computed from file content and local context:
 
 1. **Sequence length** — how many suspicious runes appear in the finding. Isolated characters (1) are treated differently from short runs (2–5), medium runs (6–15), long runs (16–63), and very long runs (64+). Longer sequences receive higher severity regardless of context.
 
 2. **File shape** — the file is classified as `code_like`, `data_like`, `prose_like`, or `unknown` based on bounded content analysis (first 64 KiB / 400 non-empty lines). Code-like files with brackets, operators, and keywords produce higher severity for the same finding than prose-like files with natural language.
 
-3. **Finding region** — the immediate context around each finding is classified as whitespace-like, string-like, comment-like, token-like, prose-like, or unknown. An invisible character inside an identifier (`token_like`) is more severe than one inside a comment or whitespace region.
+3. **File role hints** — conservative path and filename hints distinguish locale data, ordinary test source, and build or release paths. These hints are advisory only. They never suppress bidi controls, payloads, correlations, long suspicious runs, or `testdata` and fixture inputs.
 
-4. **Decoder proximity** — if a decode or dynamic-execution marker (`eval(`, `Buffer.from(`, `atob(`, etc.) appears within 5 lines of a finding, severity is escalated by one level. Markers within 20 lines escalate findings that are already `HIGH`.
+4. **Finding region** — the immediate context around each finding is classified as whitespace-like, string-like, comment-like, token-like, prose-like, or unknown. An invisible character inside an identifier (`token_like`) is more severe than one inside a comment or whitespace region.
+
+5. **Decoder proximity** — if a decode or dynamic-execution marker (`eval(`, `Buffer.from(`, `atob(`, etc.) appears within 5 lines of a finding, severity is escalated by one level. Markers within 20 lines escalate findings that are already `HIGH`.
 
 ### Per-Rule Behavior
 
 | Rule | Base severity logic |
 |------|-------------------|
 | `unicode/bidi` | Always `HIGH`. Bidi controls are never downgraded by context, comments, prose, or path hints. |
-| `unicode/invisible` | Ranges from `LOW` to `CRITICAL` depending on sequence length, file shape, and region. A file-start BOM is suppressed. A single non-leading `U+FEFF` is still reported but defaults to `LOW`; isolated characters in identifiers are `HIGH`; long runs are `CRITICAL`. |
+| `unicode/invisible` | Ranges from `LOW` to `CRITICAL` depending on sequence length, file shape, file role, and region. A file-start BOM is suppressed. A single non-leading `U+FEFF` is still reported but defaults to `LOW`; isolated characters in identifiers are `HIGH`; long runs are `CRITICAL`. |
 | `unicode/private-use` | `CRITICAL` for long runs, `HIGH` for short/medium runs and code-like token regions, `MEDIUM` in prose or data contexts. |
 | `unicode/payload` | `HIGH` for normal sequences, `CRITICAL` for long runs. |
 | `unicode/correlation` | Always `CRITICAL`. A payload near a decoder is the strongest signal. |
@@ -254,6 +256,8 @@ ghostscan treats isolated and very short invisible-character findings differentl
 
 - isolated invisible characters default to `LOW` unless they appear inside a token-like region or are elevated by nearby decode/execute markers
 - short runs in prose-like, comment-like, whitespace-like, and data-like contexts default to `LOW`
+- low-signal invisible findings may be suppressed in ordinary test source only when they appear in benign string, comment, whitespace, or prose contexts with no nearby decode, execution, shell, or build markers
+- build, release, packaging, CI, shell, and parser-sensitive fixture inputs are not softened by test-like path hints alone
 - short runs in code-like strings or unknown regions stay visible and usually land at `MEDIUM`
 - token-like invisible findings remain `HIGH`
 - long invisible runs and payload findings stay strong regardless of surrounding file shape
