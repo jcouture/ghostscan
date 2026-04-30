@@ -36,6 +36,11 @@ const (
 	fileShapeProseLike = "prose_like"
 	fileShapeUnknown   = "unknown"
 
+	fileRoleLocaleData   = "locale_data"
+	fileRoleTestFixture  = "test_fixture"
+	fileRoleBuildRelease = "build_release"
+	fileRoleUnknown      = "unknown"
+
 	regionFileStart      = "file_start"
 	regionWhitespaceLike = "whitespace_like"
 	regionStringLike     = "string_like"
@@ -53,6 +58,7 @@ const (
 
 type fileClassification struct {
 	shape string
+	role  string
 }
 
 type invisibleTraits struct {
@@ -80,12 +86,16 @@ func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Findi
 	shape := classifyFileShape(fileContext.Text)
 	classification := fileClassification{
 		shape: shape,
+		role:  classifyFileRole(fileContext.Path),
 	}
 	obsIndex := buildObservationIndex(fileContext.Observations)
 
 	filtered := findings[:0]
 	for _, item := range findings {
 		if isSuppressedFileStartBOM(fileContext, item) {
+			continue
+		}
+		if isSuppressedLowSignalInvisible(fileContext, classification, obsIndex, item) {
 			continue
 		}
 		item.Severity = classifyFindingSeverity(fileContext, classification, obsIndex, item)
@@ -130,6 +140,41 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 		severity = applyDecoderProximity(severity, fileContext.Prepass.DecoderMarkers, item)
 	}
 	return severity
+}
+
+func isSuppressedLowSignalInvisible(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, item Finding) bool {
+	if item.RuleID != detector.InvisibleRuleID {
+		return false
+	}
+	if classification.role != fileRoleTestFixture {
+		return false
+	}
+	if hasNearbyDecoderMarker(fileContext.Prepass.DecoderMarkers, item, 20) {
+		return false
+	}
+
+	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, item)
+	if region == regionTokenLike {
+		return false
+	}
+
+	profile := classifySequenceProfile(suspiciousRuneCountForFinding(item))
+	if profile != sequenceIsolated && profile != sequenceShortRun {
+		return false
+	}
+
+	line := lineText(fileContext, item.Line)
+	before, after := splitLineAroundColumn(line, item.Column)
+	if isSensitiveBuildOrExecContext(classification, line, before, after) {
+		return false
+	}
+
+	switch region {
+	case regionCommentLike, regionStringLike, regionWhitespaceLike, regionProseLike:
+		return true
+	default:
+		return classification.shape == fileShapeProseLike || classification.shape == fileShapeDataLike
+	}
 }
 
 func classifyFindingMessage(classification fileClassification, item Finding) string {
@@ -185,6 +230,9 @@ func invisibleSeverity(classification fileClassification, region, profile string
 		if region == regionCommentLike || region == regionWhitespaceLike || region == regionProseLike {
 			return SeverityLow
 		}
+		if classification.role == fileRoleLocaleData && region != regionTokenLike {
+			return SeverityLow
+		}
 		if classification.shape == fileShapeProseLike || classification.shape == fileShapeDataLike {
 			return SeverityLow
 		}
@@ -198,6 +246,8 @@ func invisibleSeverity(classification fileClassification, region, profile string
 	case region == regionTokenLike:
 		return SeverityHigh
 	case traits.onlyFEFF:
+		return SeverityLow
+	case classification.role == fileRoleLocaleData:
 		return SeverityLow
 	case classification.shape == fileShapeProseLike || region == regionCommentLike || region == regionWhitespaceLike:
 		return SeverityLow
@@ -229,24 +279,26 @@ func defaultSeverity(ruleID string) Severity {
 }
 
 func applyDecoderProximity(severity Severity, markers []Marker, item Finding) Severity {
-	if len(markers) == 0 {
-		return severity
+	if hasNearbyDecoderMarker(markers, item, 5) {
+		return upgradeSeverity(severity)
 	}
-	bestDistance := 1 << 30
+	if severity == SeverityHigh && hasNearbyDecoderMarker(markers, item, 20) {
+		return upgradeSeverity(severity)
+	}
+	return severity
+}
+
+func hasNearbyDecoderMarker(markers []Marker, item Finding, maxDistance int) bool {
+	if len(markers) == 0 {
+		return false
+	}
 	for _, marker := range markers {
 		distance := finding.LineDistance(item.Line, marker.Line)
-		if distance < bestDistance {
-			bestDistance = distance
+		if distance <= maxDistance {
+			return true
 		}
 	}
-	switch {
-	case bestDistance == 0 || bestDistance <= 5:
-		return upgradeSeverity(severity)
-	case bestDistance <= 20 && severity == SeverityHigh:
-		return upgradeSeverity(severity)
-	default:
-		return severity
-	}
+	return false
 }
 
 func upgradeSeverity(severity Severity) Severity {
@@ -297,6 +349,67 @@ func invisibleTraitsForFinding(item Finding) invisibleTraits {
 func containsAny(text string, needles ...string) bool {
 	for _, needle := range needles {
 		if strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func classifyFileRole(path string) string {
+	normalized := strings.ToLower(strings.ReplaceAll(path, "\\", "/"))
+	base := normalized
+	if slash := strings.LastIndex(normalized, "/"); slash >= 0 {
+		base = normalized[slash+1:]
+	}
+
+	switch {
+	case isBuildReleasePath(normalized, base):
+		return fileRoleBuildRelease
+	case isLocaleDataPath(normalized, base):
+		return fileRoleLocaleData
+	case isTestFixturePath(normalized, base):
+		return fileRoleTestFixture
+	default:
+		return fileRoleUnknown
+	}
+}
+
+func isBuildReleasePath(normalized, base string) bool {
+	switch base {
+	case "makefile", "gnumakefile", "configure", "config.guess", "config.sub", "meson.build", "build.gradle":
+		return true
+	}
+	for _, suffix := range []string{".sh", ".bash", ".zsh", ".mk", ".m4", ".am", ".ac", ".cmake", ".spec"} {
+		if strings.HasSuffix(base, suffix) {
+			return true
+		}
+	}
+	for _, marker := range []string{"/.github/workflows/", "/.gitlab-ci", "/debian/", "/packaging/", "/scripts/release", "/ci/"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLocaleDataPath(normalized, base string) bool {
+	if !(strings.HasSuffix(base, ".yml") || strings.HasSuffix(base, ".yaml") || strings.HasSuffix(base, ".json") || strings.HasSuffix(base, ".po") || strings.HasSuffix(base, ".pot")) {
+		return false
+	}
+	for _, marker := range []string{"/locales/", "/locale/", "/i18n/", "/translations/", "/lang/"} {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTestFixturePath(normalized, base string) bool {
+	if strings.Contains(normalized, "/test/") || strings.Contains(normalized, "/tests/") || strings.Contains(normalized, "/spec/") {
+		return true
+	}
+	for _, suffix := range []string{"_test.go", "_test.exs", "_test.ex", "_spec.rb", "_test.py", "_test.js", "_spec.js", "_test.ts", "_spec.ts", ".test.js", ".spec.js", ".test.ts", ".spec.ts"} {
+		if strings.HasSuffix(base, suffix) {
 			return true
 		}
 	}
@@ -507,6 +620,28 @@ func classifyFindingRegion(fileContext *Context, shape string, obsIndex map[posK
 		return regionProseLike
 	}
 	return regionUnknown
+}
+
+func isSensitiveBuildOrExecContext(classification fileClassification, line, before, after string) bool {
+	if classification.role == fileRoleBuildRelease {
+		return true
+	}
+
+	window := strings.ToLower(before + after)
+	lineLower := strings.ToLower(line)
+	if containsAny(window,
+		"eval(", "exec(", "system(", "popen(", "buffer.from(", "atob(", "btoa(",
+		"base64", "openssl", "sed ", "awk ", "perl ", "python ", "ruby ",
+		"bash ", "sh ", "xz ", "tar ", "gzip ", "printf", "tr ", "$( ", "$(",
+		"`", "|", "&&", "||",
+	) {
+		return true
+	}
+
+	return containsAny(lineLower,
+		"aclocal", "automake", "autoconf", "libtool", "pkg-config", "cmake",
+		"meson", "ninja", "make ", "makefile", "install-sh", "debhelper",
+	)
 }
 
 func lineText(fileContext *Context, line int) string {
