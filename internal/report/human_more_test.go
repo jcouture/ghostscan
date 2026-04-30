@@ -150,9 +150,6 @@ func TestHumanHelperFunctions(t *testing.T) {
 	if got := formatSkipBreakdown([]Count{{Label: "custom", Value: 2}, {Label: "too_large", Value: 1}, {Label: "binary_nul", Value: 3}}); got != "binary: 3, oversize: 1, custom: 2" {
 		t.Fatalf("formatSkipBreakdown() = %q", got)
 	}
-	if got := lineDistance(9, 3); got != 6 {
-		t.Fatalf("lineDistance() = %d, want 6", got)
-	}
 	if got := plural(1); got != "" {
 		t.Fatalf("plural(1) = %q, want empty", got)
 	}

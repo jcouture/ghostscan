@@ -88,11 +88,11 @@ func nearestDecoder(payload finding.Finding, decoders []DecoderMarker) (DecoderM
 	)
 
 	for _, decoder := range decoders {
-		distance := lineDistance(payload.Line, decoder.Line)
+		distance := finding.LineDistance(payload.Line, decoder.Line)
 		if distance > correlationLines {
 			continue
 		}
-		if !found || distance < lineDistance(payload.Line, best.Line) || (distance == lineDistance(payload.Line, best.Line) && decoder.Line < best.Line) {
+		if !found || distance < finding.LineDistance(payload.Line, best.Line) || (distance == finding.LineDistance(payload.Line, best.Line) && decoder.Line < best.Line) {
 			best = decoder
 			found = true
 		}
@@ -102,7 +102,7 @@ func nearestDecoder(payload finding.Finding, decoders []DecoderMarker) (DecoderM
 }
 
 func correlationMessage(payload finding.Finding, decoder DecoderMarker) string {
-	distance := lineDistance(payload.Line, decoder.Line)
+	distance := finding.LineDistance(payload.Line, decoder.Line)
 	kind := "decode"
 	if decoder.Kind == "dynamic-exec" {
 		kind = "decode / execution"
@@ -121,11 +121,4 @@ func correlationPlural(count int) string {
 		return ""
 	}
 	return "s"
-}
-
-func lineDistance(left, right int) int {
-	if left > right {
-		return left - right
-	}
-	return right - left
 }

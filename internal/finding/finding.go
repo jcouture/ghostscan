@@ -41,3 +41,10 @@ type Finding struct {
 	Evidence  string
 	Context   string
 }
+
+func LineDistance(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}

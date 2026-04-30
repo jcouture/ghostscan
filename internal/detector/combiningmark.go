@@ -88,7 +88,7 @@ func detectCombiningMarkToken(path string, token []Observation) (finding.Finding
 			continue
 		}
 
-		if isTokenRune(observation.Rune) {
+		if isIdentRune(observation.Rune) {
 			hasBaseTokenRune = true
 		}
 	}
@@ -108,7 +108,7 @@ func detectCombiningMarkToken(path string, token []Observation) (finding.Finding
 }
 
 func isCombiningTokenRune(r rune) bool {
-	return isTokenRune(r) || unicodeutil.IsCombiningMark(r)
+	return isIdentRune(r) || unicodeutil.IsCombiningMark(r)
 }
 
 func observationsRunes(observations []Observation) []rune {

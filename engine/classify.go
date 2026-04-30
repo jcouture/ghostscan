@@ -26,6 +26,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jcouture/ghostscan/internal/detector"
+	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
 
@@ -59,6 +60,18 @@ type invisibleTraits struct {
 	onlyFEFF bool
 }
 
+type posKey struct {
+	line, column int
+}
+
+func buildObservationIndex(observations []Observation) map[posKey]Observation {
+	index := make(map[posKey]Observation, len(observations))
+	for _, obs := range observations {
+		index[posKey{obs.Line, obs.Column}] = obs
+	}
+	return index
+}
+
 func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Finding {
 	if len(findings) == 0 {
 		return findings
@@ -68,13 +81,14 @@ func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Findi
 	classification := fileClassification{
 		shape: shape,
 	}
+	obsIndex := buildObservationIndex(fileContext.Observations)
 
 	filtered := findings[:0]
 	for _, item := range findings {
 		if isSuppressedFileStartBOM(fileContext, item) {
 			continue
 		}
-		item.Severity = classifyFindingSeverity(fileContext, classification, item)
+		item.Severity = classifyFindingSeverity(fileContext, classification, obsIndex, item)
 		item.Message = classifyFindingMessage(classification, item)
 		filtered = append(filtered, item)
 	}
@@ -92,8 +106,8 @@ func isSuppressedFileStartBOM(fileContext *Context, item Finding) bool {
 	return first.ByteOffset == 0 && first.Rune == '\uFEFF' && suspiciousRuneCountForFinding(item) == 1
 }
 
-func classifyFindingSeverity(fileContext *Context, classification fileClassification, item Finding) Severity {
-	region := classifyFindingRegion(fileContext, classification.shape, item)
+func classifyFindingSeverity(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, item Finding) Severity {
+	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, item)
 	profile := classifySequenceProfile(suspiciousRuneCountForFinding(item))
 
 	var severity Severity
@@ -220,7 +234,7 @@ func applyDecoderProximity(severity Severity, markers []Marker, item Finding) Se
 	}
 	bestDistance := 1 << 30
 	for _, marker := range markers {
-		distance := findingLineDistance(item.Line, marker.Line)
+		distance := finding.LineDistance(item.Line, marker.Line)
 		if distance < bestDistance {
 			bestDistance = distance
 		}
@@ -233,13 +247,6 @@ func applyDecoderProximity(severity Severity, markers []Marker, item Finding) Se
 	default:
 		return severity
 	}
-}
-
-func findingLineDistance(left, right int) int {
-	if left > right {
-		return left - right
-	}
-	return right - left
 }
 
 func upgradeSeverity(severity Severity) Severity {
@@ -471,8 +478,8 @@ func naturalWordCount(text string) int {
 	return count
 }
 
-func classifyFindingRegion(fileContext *Context, shape string, item Finding) string {
-	observation, ok := observationForFinding(fileContext, item)
+func classifyFindingRegion(fileContext *Context, shape string, obsIndex map[posKey]Observation, item Finding) string {
+	observation, ok := obsIndex[posKey{item.Line, item.Column}]
 	if !ok {
 		return regionUnknown
 	}
@@ -500,15 +507,6 @@ func classifyFindingRegion(fileContext *Context, shape string, item Finding) str
 		return regionProseLike
 	}
 	return regionUnknown
-}
-
-func observationForFinding(fileContext *Context, item Finding) (Observation, bool) {
-	for _, observation := range fileContext.Observations {
-		if observation.Line == item.Line && observation.Column == item.Column {
-			return observation, true
-		}
-	}
-	return Observation{}, false
 }
 
 func lineText(fileContext *Context, line int) string {
@@ -547,16 +545,13 @@ func isWhitespaceLikeRegion(line string, column int) bool {
 	}
 	left := max(index-12, 0)
 	right := min(index+13, len(runes))
-	for _, r := range append(append([]rune{}, runes[left:index]...), runes[index+1:right]...) {
-		if !unicode.IsSpace(r) {
+	for i := left; i < right; i++ {
+		if i == index {
+			continue
+		}
+		if !unicode.IsSpace(runes[i]) {
 			return false
 		}
-	}
-	if index > 0 && strings.TrimSpace(string(runes[:index])) == "" {
-		return true
-	}
-	if index+1 < len(runes) && strings.TrimSpace(string(runes[index+1:])) == "" {
-		return true
 	}
 	return true
 }

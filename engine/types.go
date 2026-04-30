@@ -22,9 +22,14 @@ package engine
 
 import "github.com/jcouture/ghostscan/internal/finding"
 
+// Finding represents a single detected Unicode obfuscation instance, including
+// its location, rule, severity, and evidence.
 type Finding = finding.Finding
+
+// Severity indicates the assessed risk level of a finding.
 type Severity = finding.Severity
 
+// Severity constants ordered from lowest to highest risk.
 const (
 	SeverityLow      = finding.SeverityLow
 	SeverityMedium   = finding.SeverityMedium
@@ -32,8 +37,17 @@ const (
 	SeverityCritical = finding.SeverityCritical
 )
 
+// Result is the outcome of a scan, containing classified findings and metadata
+// about the scanned content.
 type Result struct {
-	Findings    []Finding
-	Bytes       int64
+	// Findings holds zero or more detected obfuscation instances, sorted by
+	// position and classified with a severity.
+	Findings []Finding
+
+	// Bytes is the size of the scanned content.
+	Bytes int64
+
+	// InvalidUTF8 is true when the content contained at least one invalid
+	// UTF-8 sequence, which may indicate binary data or corruption.
 	InvalidUTF8 bool
 }
