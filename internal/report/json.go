@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/finding"
 )
 
 const JSONFormatVersion = "1.0"

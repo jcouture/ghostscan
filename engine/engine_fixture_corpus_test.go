@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/finding"
 )
 
 func TestEngineScanExpandedInvisibleFixtures(t *testing.T) {

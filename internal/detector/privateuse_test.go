@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/finding"
 )
 
 func TestPrivateUseDetectMultipleRanges(t *testing.T) {

@@ -20,7 +20,7 @@
 
 package engine
 
-import "github.com/jcouture/ghostscan/internal/finding"
+import "github.com/jcouture/ghostscan/finding"
 
 // Finding represents a single detected Unicode obfuscation instance, including
 // its location, rule, severity, and evidence.

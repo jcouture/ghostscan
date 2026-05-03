@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/finding"
 )
 
 // errorWriter is an io.Writer that always returns an error.

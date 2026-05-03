@@ -25,7 +25,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/jcouture/ghostscan/internal/finding"
+	"github.com/jcouture/ghostscan/finding"
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
 
