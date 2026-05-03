@@ -27,8 +27,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jcouture/ghostscan/finding"
 	"github.com/jcouture/ghostscan/internal/detector"
-	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 func TestFileStartBOMSuppressedOnlyAtAbsoluteStart(t *testing.T) {

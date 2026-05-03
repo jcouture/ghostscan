@@ -30,8 +30,8 @@ import (
 
 	"github.com/h2non/filetype"
 	"github.com/jcouture/ghostscan/engine"
+	"github.com/jcouture/ghostscan/finding"
 	"github.com/jcouture/ghostscan/internal/filesystem"
-	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/report"
 )
 

@@ -20,7 +20,7 @@
 
 package engine
 
-import "github.com/jcouture/ghostscan/internal/finding"
+import "github.com/jcouture/ghostscan/finding"
 
 func SortFindings(findings []Finding) {
 	finding.Sort(findings)
