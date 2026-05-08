@@ -4,6 +4,46 @@ All notable changes to ghostscan are documented here.
 
 ---
 
+## v0.4.0 - 2026-05-08
+
+### New Features
+
+- **Context-aware severity classification** - every finding is now assigned a severity (`LOW`, `MEDIUM`, `HIGH`, or `CRITICAL`) based on five inputs: sequence length, file shape (`code_like`/`data_like`/`prose_like`), file-role hints, finding region context, and decoder proximity. Bidi controls stay `HIGH` regardless of context; long invisible runs and payload correlations reach `CRITICAL`.
+- **Public engine API** - the new `engine` package exposes `ScanFile`, `ScanBytes`, `ScanString`, and their `Detailed` variants so external Go projects can consume structured findings without invoking the CLI. Includes `Options` for `DisableBinaryCheck` and `DisableContext` modes, plus `SortFindings` for deterministic output ordering.
+- **File-role hints** - conservative path and filename hints classify files as `locale_data`, `test_fixture`, or `build_release`. Low-signal invisible findings in benign test fixture contexts are suppressed, while bidi controls, payloads, correlations, long runs, and build or release contexts are never softened.
+- **BOM suppression** - `U+FEFF` at byte offset 0 is recognized as a standard file BOM and no longer reported.
+
+### Changes
+
+- **`finding` package promoted to root** - `Finding`, `Severity`, `LineDistance`, and sorting utilities moved from `internal/finding` to the top-level `finding` package. External consumers can import this package directly without pulling in the engine.
+- **Report suppression extracted** - finding suppression logic moved from `human.go` into a dedicated `suppress.go` module for clarity and reuse.
+- **Observation lookup optimized** - replaced O(n) linear scan with map-based index lookup for observation-to-finding correlation.
+- **`isTokenRune` renamed to `isIdentRune`** - naming now reflects its purpose more clearly.
+- **Missing rule categories added to JSON output** - JSON reports now include rule categories that were previously omitted.
+- **Decoder proximity refactored** - `hasNearbyDecoderMarker` extracted as a standalone helper, shared between classification and correlation logic.
+- **`lineDistance` consolidated** - duplicate implementations unified into `finding.LineDistance`.
+
+### Documentation
+
+- README updated with reusable engine usage example, severity level tables, per-rule severity behavior, and low-signal invisible handling documentation.
+- Added doc comments to all exported engine types and methods.
+
+### Tests
+
+- Added test coverage for severity classification across file shapes, region types, sequence lengths, and decoder proximity.
+- Added public API tests for `ScanFile`, `ScanBytes`, `ScanString`, and `ScanBytesDetailed`.
+- Added tests for file-role hint classification and low-signal suppression guards.
+
+### Maintenance
+
+- Bumped Go from `1.26.2` to `1.26.3`.
+- Bumped `goreleaser/goreleaser-action` from `7.0.0` to `7.2.1`.
+- Bumped `zerolog` to `v1.35.1`.
+- Bumped `go-isatty` indirect dependency to `0.0.22`.
+- Bumped `golang.org/x/sys` indirect dependency from `v0.43.0` to `v0.44.0`.
+
+---
+
 ## v0.3.0 - 2026-04-12
 
 ### New Features
