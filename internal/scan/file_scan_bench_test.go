@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package engine
+package scan
 
 import (
 	"context"
@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jcouture/ghostscan/finding"
+	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 var (
@@ -44,6 +44,7 @@ func BenchmarkScanFile(b *testing.B) {
 	}{
 		{name: "ASCII", path: fixturePath("clean", "ascii.txt")},
 		{name: "MixedUnicode", path: fixturePath("mixed", "correlated_decoder_near_payload.js")},
+		{name: "CampaignStylePUA", path: fixturePath("mixed", "calendar_invite_pua.js")},
 		{name: "PayloadDense", path: fixturePath("payload", "density_mixed_controls.txt")},
 		{name: "LongLineASCII", path: longLinePath},
 	}
@@ -71,6 +72,7 @@ func BenchmarkScanFileDetailed(b *testing.B) {
 	}{
 		{name: "CleanASCII", path: fixturePath("clean", "ascii.txt")},
 		{name: "MixedRepoFile", path: fixturePath("mixed", "correlated_decoder_near_payload.js")},
+		{name: "CampaignStylePUA", path: fixturePath("mixed", "calendar_invite_pua.js")},
 		{name: "PayloadDense", path: fixturePath("payload", "density_mixed_controls.txt")},
 	}
 

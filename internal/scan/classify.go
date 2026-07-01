@@ -18,15 +18,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package engine
+package scan
 
 import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/jcouture/ghostscan/finding"
 	"github.com/jcouture/ghostscan/internal/detector"
+	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
 
@@ -119,13 +119,15 @@ func isSuppressedFileStartBOM(fileContext *Context, item Finding) bool {
 func classifyFindingSeverity(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, item Finding) Severity {
 	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, item)
 	profile := classifySequenceProfile(suspiciousRuneCountForFinding(item))
+	line := lineText(fileContext, item.Line)
+	before, after := splitLineAroundColumn(line, item.Column)
 
 	var severity Severity
 	switch item.RuleID {
 	case detector.BidiRuleID:
 		return SeverityHigh
 	case detector.PrivateUseRuleID:
-		severity = privateUseSeverity(classification.shape, region, profile)
+		severity = privateUseSeverity(classification.shape, region, profile, isQuotedStringLiteralRegion(before, after))
 	case detector.InvisibleRuleID:
 		severity = invisibleSeverity(classification, region, profile, invisibleTraitsForFinding(item))
 	case detector.PayloadRuleID:
@@ -201,7 +203,7 @@ func classifyFindingMessage(classification fileClassification, item Finding) str
 	}
 }
 
-func privateUseSeverity(shape, region, profile string) Severity {
+func privateUseSeverity(shape, region, profile string, quotedString bool) Severity {
 	switch profile {
 	case sequenceLongRun, sequenceVeryLongRun:
 		return SeverityCritical
@@ -210,6 +212,9 @@ func privateUseSeverity(shape, region, profile string) Severity {
 	}
 	if shape == fileShapeCodeLike && region == regionTokenLike {
 		return SeverityHigh
+	}
+	if shape == fileShapeCodeLike && region == regionStringLike && quotedString {
+		return SeverityMedium
 	}
 	if shape == fileShapeProseLike || shape == fileShapeDataLike {
 		return SeverityMedium
@@ -692,14 +697,21 @@ func isWhitespaceLikeRegion(line string, column int) bool {
 }
 
 func isStringLikeRegion(shape, before, after string) bool {
-	for _, quote := range []rune{'\'', '"', '`'} {
-		if hasOpenQuoteBefore(before, quote) && strings.ContainsRune(after, quote) {
-			return true
-		}
+	if isQuotedStringLiteralRegion(before, after) {
+		return true
 	}
 	if shape == fileShapeDataLike {
 		separator := max(strings.LastIndex(before, ":"), strings.LastIndex(before, "="))
 		return separator >= 0 && strings.TrimSpace(before[separator+1:]) != ""
+	}
+	return false
+}
+
+func isQuotedStringLiteralRegion(before, after string) bool {
+	for _, quote := range []rune{'\'', '"', '`'} {
+		if hasOpenQuoteBefore(before, quote) && strings.ContainsRune(after, quote) {
+			return true
+		}
 	}
 	return false
 }

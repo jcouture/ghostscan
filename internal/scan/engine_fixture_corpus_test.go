@@ -18,14 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package engine
+package scan
 
 import (
 	"context"
 	"strings"
 	"testing"
 
-	"github.com/jcouture/ghostscan/finding"
+	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 func TestEngineScanExpandedInvisibleFixtures(t *testing.T) {
@@ -113,6 +113,13 @@ func TestEngineScanExpandedPrivateUseFixtures(t *testing.T) {
 				{ruleID: "unicode/private-use", line: 1, column: 19, evidence: "<U+E001>"},
 			},
 		},
+		{
+			name:    "campaign style quoted private use string",
+			fixture: fixturePath("privateuse", "repository_poisoning_like.js"),
+			expected: []expectedFinding{
+				{ruleID: "unicode/private-use", line: 1, column: 22, evidence: "<U+E000>"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -127,6 +134,38 @@ func TestEngineScanExpandedPrivateUseFixtures(t *testing.T) {
 			assertFindingsExactly(t, findings, tt.expected)
 		})
 	}
+}
+
+func TestEngineScanCampaignStylePUAFixture(t *testing.T) {
+	t.Parallel()
+
+	findings, err := NewEngine().ScanFile(context.Background(), fixturePath("mixed", "calendar_invite_pua.js"))
+	if err != nil {
+		t.Fatalf("ScanFile() error = %v", err)
+	}
+
+	assertFindingsExactly(t, findings, []expectedFinding{
+		{
+			ruleID:   "unicode/private-use",
+			line:     1,
+			column:   17,
+			evidence: repeatEvidence("<U+E000>", 17),
+		},
+		{
+			ruleID:   "unicode/payload",
+			line:     1,
+			column:   17,
+			message:  "Suspicious encoded payload sequence detected: 17 consecutive private-use Unicode characters",
+			evidence: repeatEvidence("<U+E000>", 17),
+		},
+		{
+			ruleID:   "unicode/correlation",
+			line:     1,
+			column:   17,
+			message:  "Hidden Unicode payload with nearby decode pattern: Buffer.from( (1 line away)",
+			evidence: "payload: " + repeatEvidence("<U+E000>", 17) + " | marker: Buffer.from(",
+		},
+	})
 }
 
 func TestEngineScanExpandedBidiFixtures(t *testing.T) {

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jcouture/ghostscan/finding"
+	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 func TestPayloadDetect(t *testing.T) {

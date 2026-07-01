@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package engine
+package scan
 
 import (
 	"context"
@@ -27,8 +27,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jcouture/ghostscan/finding"
 	"github.com/jcouture/ghostscan/internal/detector"
+	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 func TestFileStartBOMSuppressedOnlyAtAbsoluteStart(t *testing.T) {
@@ -191,6 +191,7 @@ func TestSeverityPolicy(t *testing.T) {
 		{name: "long invisible run critical", path: "src/blob.go", content: "const x = \"" + strings.Repeat("\u200B", 16) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityCritical, message: "Long invisible Unicode run suggests encoded payload"},
 		{name: "repeated feff run remains strong", path: "src/blob.go", content: "const x = \"" + strings.Repeat("\uFEFF", 6) + "\";\n", ruleID: detector.InvisibleRuleID, line: 1, column: 12, want: finding.SeverityHigh, message: "Repeated U+FEFF invisible sequence detected"},
 		{name: "isolated private use in data medium", path: "messages/catalog", content: strings.Repeat("key: value\n", 12) + "label: \uE000\n", ruleID: detector.PrivateUseRuleID, line: 13, column: 8, want: finding.SeverityMedium},
+		{name: "isolated private use in quoted source string medium", path: "src/app.js", content: codeLikePrefix() + "const label = \"a\uE000b\";\n", ruleID: detector.PrivateUseRuleID, line: 6, column: 17, want: finding.SeverityMedium},
 		{name: "private use in token high", path: "src/app", content: codeLikePrefix() + "const icon\uE000Name = 1;\n", ruleID: detector.PrivateUseRuleID, line: 6, column: 11, want: finding.SeverityHigh},
 		{name: "short private use run high", path: "src/app", content: "const x = \"\uE000\uE001\";\n", ruleID: detector.PrivateUseRuleID, line: 1, column: 12, want: finding.SeverityHigh},
 		{name: "long private use run critical", path: "src/app", content: "const x = \"" + strings.Repeat("\uE000", 16) + "\";\n", ruleID: detector.PrivateUseRuleID, line: 1, column: 12, want: finding.SeverityCritical},
