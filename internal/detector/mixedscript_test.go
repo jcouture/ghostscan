@@ -23,7 +23,7 @@ package detector
 import (
 	"testing"
 
-	"github.com/jcouture/ghostscan/finding"
+	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 func TestMixedScriptDetect(t *testing.T) {

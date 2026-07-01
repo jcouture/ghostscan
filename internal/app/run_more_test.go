@@ -27,8 +27,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jcouture/ghostscan/finding"
 	"github.com/jcouture/ghostscan/internal/filesystem"
+	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 func TestOutputFormatValidate(t *testing.T) {

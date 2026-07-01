@@ -138,10 +138,10 @@ func TestRunRendersIncidentReport(t *testing.T) {
 	if !strings.Contains(output, "ghostscan dev") {
 		t.Fatalf("stdout = %q, want version header", output)
 	}
-	if !strings.Contains(output, "scanned 9 files") {
+	if !strings.Contains(output, "scanned 10 files") {
 		t.Fatalf("stdout = %q, want scanned file count", output)
 	}
-	if !strings.Contains(output, "INF scanned 9 files") {
+	if !strings.Contains(output, "INF scanned 10 files") {
 		t.Fatalf("stdout = %q, want scan summary log", output)
 	}
 	if !strings.Contains(output, "WRN suspicious pattern found:") {

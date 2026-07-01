@@ -29,10 +29,10 @@ import (
 	"time"
 
 	"github.com/h2non/filetype"
-	"github.com/jcouture/ghostscan/engine"
-	"github.com/jcouture/ghostscan/finding"
 	"github.com/jcouture/ghostscan/internal/filesystem"
+	"github.com/jcouture/ghostscan/internal/finding"
 	"github.com/jcouture/ghostscan/internal/report"
+	"github.com/jcouture/ghostscan/internal/scan"
 )
 
 type Options struct {
@@ -149,7 +149,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	walkCompleted := now()
 	walkDuration := walkCompleted.Sub(walkStart)
 
-	scanner := engine.New(engine.Options{})
+	scanner := scan.NewEngine()
 	scanStart := walkCompleted
 	results, scanErrors := scanCandidates(ctx, scanner, discovery.Candidates)
 	scanCompleted := now()
@@ -213,7 +213,7 @@ func buildExcludeReporter(w io.Writer, verbose bool) func(path, pattern string) 
 	}
 }
 
-func scanCandidates(ctx context.Context, scanner *engine.Engine, paths []string) ([]fileScanResult, []scanError) {
+func scanCandidates(ctx context.Context, scanner *scan.Engine, paths []string) ([]fileScanResult, []scanError) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -232,7 +232,7 @@ func scanCandidates(ctx context.Context, scanner *engine.Engine, paths []string)
 		go func() {
 			for job := range jobs {
 				// Per-file scans stay boring; workerCount is capped above on purpose.
-				result, err := scanner.ScanFileDetailed(ctx, job.path)
+				result, err := scanner.ScanTrustedTextFileDetailed(ctx, job.path)
 				results <- fileScanResult{
 					path:     job.path,
 					findings: result.Findings,

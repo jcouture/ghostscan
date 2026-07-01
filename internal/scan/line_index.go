@@ -18,34 +18,43 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package engine
+package scan
 
-import "testing"
+import (
+	"sort"
+	"unicode/utf8"
+)
 
-func TestSortFindings(t *testing.T) {
-	t.Parallel()
-
-	findings := []Finding{
-		{Path: "b.js", Line: 1, Column: 1, RuleID: "unicode/private-use", Message: "z"},
-		{Path: "a.js", Line: 2, Column: 1, RuleID: "unicode/invisible", Message: "z"},
-		{Path: "a.js", Line: 1, Column: 4, RuleID: "unicode/private-use", Message: "z"},
-		{Path: "a.js", Line: 1, Column: 4, RuleID: "unicode/invisible", Message: "z"},
-		{Path: "a.js", Line: 1, Column: 4, RuleID: "unicode/invisible", Message: "a"},
-	}
-
-	SortFindings(findings)
-
-	want := []Finding{
-		{Path: "a.js", Line: 1, Column: 4, RuleID: "unicode/invisible", Message: "a"},
-		{Path: "a.js", Line: 1, Column: 4, RuleID: "unicode/invisible", Message: "z"},
-		{Path: "a.js", Line: 1, Column: 4, RuleID: "unicode/private-use", Message: "z"},
-		{Path: "a.js", Line: 2, Column: 1, RuleID: "unicode/invisible", Message: "z"},
-		{Path: "b.js", Line: 1, Column: 1, RuleID: "unicode/private-use", Message: "z"},
-	}
-
-	for index := range want {
-		if findings[index] != want[index] {
-			t.Fatalf("finding[%d] = %#v, want %#v", index, findings[index], want[index])
+func buildLineStarts(content []byte) []int {
+	lineStarts := []int{0}
+	for i, b := range content {
+		if b == '\n' && i+1 <= len(content) {
+			lineStarts = append(lineStarts, i+1)
 		}
 	}
+
+	return lineStarts
+}
+
+func positionForOffset(content []byte, lineStarts []int, offset int) (int, int) {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(content) {
+		offset = len(content)
+	}
+
+	lineIndex := max(sort.Search(len(lineStarts), func(i int) bool {
+		return lineStarts[i] > offset
+	})-1, 0)
+
+	lineStart := lineStarts[lineIndex]
+	column := 1
+	for i := lineStart; i < offset; {
+		_, width := utf8.DecodeRune(content[i:])
+		i += width
+		column++
+	}
+
+	return lineIndex + 1, column
 }

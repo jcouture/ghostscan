@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package engine
+package scan
 
 import (
 	"context"
@@ -167,7 +167,7 @@ func TestScanFileCanceled(t *testing.T) {
 }
 
 func fixturePath(parts ...string) string {
-	return filepath.Join(append([]string{"..", "testdata"}, parts...)...)
+	return filepath.Join(append([]string{"..", "..", "testdata"}, parts...)...)
 }
 
 func writeTempFile(t *testing.T, name string, content []byte) string {

@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jcouture/ghostscan/finding"
+	"github.com/jcouture/ghostscan/internal/finding"
 )
 
 func TestWriteHeader(t *testing.T) {
