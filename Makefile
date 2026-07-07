@@ -3,7 +3,7 @@ MODULE ?= github.com/jcouture/ghostscan
 VERSION_PKG ?= $(MODULE)/cmd
 BIN_DIR ?= bin
 BIN ?= $(BIN_DIR)/$(APP)
-GORELEASER ?= go run github.com/goreleaser/goreleaser/v2@v2.12.7
+GORELEASER ?= go run github.com/goreleaser/goreleaser/v2@v2.16.0
 SVU ?= go run github.com/caarlos0/svu/v3@v3.2.2
 
 GOFLAGS ?= -trimpath -buildvcs=false

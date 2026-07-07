@@ -1,2 +1,5 @@
 [tools]
 go = "1.26.4"
+cosign = "3.1.1"
+goreleaser = "2.17.0"
+"github:caarlos0/pinata" = "v0.3.4"

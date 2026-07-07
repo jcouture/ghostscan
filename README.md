@@ -55,6 +55,9 @@ Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/in
 ## Installation
 
 ```bash
+# Homebrew (macOS)
+brew install --cask jcouture/tap/ghostscan
+
 # Pre-built release binary
 # Download the archive for your platform from:
 # https://github.com/jcouture/ghostscan/releases
@@ -75,9 +78,22 @@ go install github.com/jcouture/ghostscan@latest
 ghostscan --version
 ```
 
-> **Requirements:** Go `1.26.2` is pinned in `go.mod` and `mise.toml` for source builds. Pre-built release archives are produced for Linux, macOS, and Windows.
+> **Requirements:** Go `1.26.4` is pinned in `go.mod` and `mise.toml` for source builds. Pre-built release archives are produced for Linux, macOS, and Windows. Tagged releases also update the `jcouture/homebrew-tap` Homebrew cask.
 
 You should see `ghostscan dev (commit none)` from a plain source build, or a real tag and commit in a release build.
+
+### Verifying Release Signatures
+
+Every tagged release signs `checksums.txt` with [cosign](https://github.com/sigstore/cosign) using a keypair, producing a `checksums.txt.sigstore.json` bundle alongside the release archives. The public key is committed at [`cosign.pub`](cosign.pub).
+
+```bash
+cosign verify-blob \
+  --key https://raw.githubusercontent.com/jcouture/ghostscan/main/cosign.pub \
+  --bundle checksums.txt.sigstore.json \
+  checksums.txt
+```
+
+Download `checksums.txt` and `checksums.txt.sigstore.json` from the release page alongside the archive you want, verify the signature, then confirm the archive's checksum matches the entry in `checksums.txt`.
 
 ## Usage
 
