@@ -21,6 +21,7 @@ builds:
       - arm64
     flags:
       - -trimpath
+      - -buildvcs=false
     ldflags:
       - >-
         -s -w
@@ -28,15 +29,30 @@ builds:
         -X github.com/jcouture/ghostscan/cmd.Commit={{ .Commit }}
 
 archives:
-  - id: default
+  - id: ghostscan
     ids:
       - ghostscan
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
       - README.md
     format_overrides:
       - goos: windows
         formats: [zip]
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    stdin: "{{ .Env.COSIGN_PASSWORD }}"
+    args:
+      - sign-blob
+      - --key=env://COSIGN_PRIVATE_KEY
+      - --bundle=${signature}
+      - ${artifact}
+      - --yes
+    artifacts: checksum
 
 checksum:
   name_template: checksums.txt
@@ -51,6 +67,25 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^chore:"
+
+homebrew_casks:
+  - name: ghostscan
+    ids:
+      - ghostscan
+    binaries:
+      - ghostscan
+    repository:
+      owner: jcouture
+      name: homebrew-tap
+    directory: Casks
+    homepage: https://github.com/jcouture/ghostscan
+    description: Static Unicode security scanner for developers and CI teams
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ghostscan"]
+          end
 
 release:
   github:
