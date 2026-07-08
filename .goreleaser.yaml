@@ -87,7 +87,34 @@ homebrew_casks:
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ghostscan"]
           end
 
-release:
-  github:
-    owner: jcouture
-    name: ghostscan
+dockers:
+  - id: ghostscan-amd64
+    ids:
+      - ghostscan
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/jcouture/ghostscan:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+
+  - id: ghostscan-arm64
+    ids:
+      - ghostscan
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/jcouture/ghostscan:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+
+docker_manifests:
+  - name_template: "ghcr.io/jcouture/ghostscan:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/jcouture/ghostscan:{{ .Version }}-amd64"
+      - "ghcr.io/jcouture/ghostscan:{{ .Version }}-arm64"
+
+  - name_template: "ghcr.io/jcouture/ghostscan:latest"
+    image_templates:
+      - "ghcr.io/jcouture/ghostscan:{{ .Version }}-amd64"
+      - "ghcr.io/jcouture/ghostscan:{{ .Version }}-arm64"
