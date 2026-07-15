@@ -23,7 +23,7 @@ It is built for security engineers, maintainers, Go developers, and DevOps teams
            ###         #
               ###########
 
-ghostscan v0.2.0
+ghostscan v0.4.0
 
 Finding:     Invisible unicode character
 Evidence:    <U+200B ZERO WIDTH SPACE>
@@ -58,6 +58,10 @@ Fingerprint: /Users/johnsmith/ghostscan/testdata/invisible/single.txt:unicode/in
 # Homebrew (macOS)
 brew install --cask jcouture/tap/ghostscan
 
+# Docker (multi-arch: linux/amd64, linux/arm64)
+# Mount the directory you want to scan at /src and pass it as the path
+docker run --rm -v "$PWD:/src" ghcr.io/jcouture/ghostscan:latest /src
+
 # Pre-built release binary
 # Download the archive for your platform from:
 # https://github.com/jcouture/ghostscan/releases
@@ -78,7 +82,7 @@ go install github.com/jcouture/ghostscan@latest
 ghostscan --version
 ```
 
-> **Requirements:** Go `1.26.4` is pinned in `go.mod` and `mise.toml` for source builds. Pre-built release archives are produced for Linux, macOS, and Windows. Tagged releases also update the `jcouture/homebrew-tap` Homebrew cask.
+> **Requirements:** Go `1.26.5` is pinned in `go.mod` and `mise.toml` for source builds. Pre-built release archives are produced for Linux, macOS, and Windows. Tagged releases also update the `jcouture/homebrew-tap` Homebrew cask and publish multi-arch `linux/amd64` and `linux/arm64` images to `ghcr.io/jcouture/ghostscan` (both versioned and `latest` tags).
 
 You should see `ghostscan dev (commit none)` from a plain source build, or a real tag and commit in a release build.
 
@@ -189,7 +193,7 @@ The current scanner behavior is intentionally narrow and real:
 - Uses a default max file size of `5 MiB`.
 - Matches excludes against the full normalized relative path with `/` separators.
 - Supports repeatable `--exclude` globs with `**` matching zero or more path segments and `filepath.Match` semantics for other segments.
-- Applies built-in excludes by default: `.git/**`, `node_modules/**`, `vendor/**`, `dist/**`, `build/**`, `target/**`, `out/**`, and `coverage/**`.
+- Applies built-in excludes by default: `**/.git/**`, `node_modules/**`, `vendor/**`, `dist/**`, `build/**`, `target/**`, `out/**`, and `coverage/**`.
 - `--no-default-excludes` disables the built-in exclude set completely.
 - Never executes scanned code or fetches network resources.
 
