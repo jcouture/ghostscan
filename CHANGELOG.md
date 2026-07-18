@@ -4,6 +4,38 @@ All notable changes to ghostscan are documented here.
 
 ---
 
+## v0.5.0 - 2026-07-18
+
+### Distribution
+
+- **Homebrew install** - ghostscan can now be installed from the `jcouture/homebrew-tap` Homebrew tap. Tagged releases automatically update the cask.
+- **Docker image** - ghostscan is now published as a multi-arch container image at `ghcr.io/jcouture/ghostscan`, with `linux/amd64` and `linux/arm64` support and both versioned and `latest` tags.
+
+### Changes
+
+- **Public engine and finding packages re-internalized** - the `engine` and `finding` packages, introduced as public in v0.4.0, have moved back under `internal/scan` and `internal/finding`. ghostscan is a CLI tool, not a reusable library; the scan API is no longer exported. The CLI behavior (detection, output, exit codes) is unchanged.
+- **Private-use string refinement** - isolated private-use characters inside genuinely quoted code strings now classify as `MEDIUM` instead of inheriting the broader code-like `HIGH` default. Token-like code findings, short runs, long runs, payloads, and correlations are unchanged.
+- **Release signing** - tagged releases now sign `checksums.txt` with Cosign and publish the signature bundle alongside the release assets.
+- **Release workflow credentials updated** - the GitHub Actions release job now uses `GH_PAT` for cross-repository tap publishing and installs pinned Cosign and GoReleaser versions in CI.
+- **CodeQL scanning added** - GitHub Actions now runs CodeQL analysis for Go on pushes to `main`, on pull requests, and on a weekly schedule.
+
+### Tests and Benchmarks
+
+- Added campaign-style PUA fixtures covering a quoted-string repository-poisoning shape and a private-use payload near `Buffer.from(...)`.
+- Added scan benchmarks for the new campaign-style private-use fixture.
+
+### Maintenance
+
+- Bumped Go from `1.26.3` to `1.26.5`.
+- Bumped `go-colorable` indirect dependency from `0.1.14` to `0.1.15`.
+- Bumped `golang.org/x/sys` indirect dependency from `0.44.0` to `0.47.0`.
+
+### CI and Build
+
+- **Docker publishing pipeline** - the release workflow builds the multi-arch image on a minimal scratch-based Dockerfile via QEMU, logs in to GHCR with the workflow token, and pushes the versioned multi-arch manifest alongside the `latest` tag.
+
+---
+
 ## v0.4.0 - 2026-05-08
 
 ### New Features
