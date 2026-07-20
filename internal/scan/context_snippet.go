@@ -21,8 +21,8 @@
 package scan
 
 import (
+	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
@@ -35,52 +35,75 @@ func enrichFindingContexts(fileContext *Context, findings []Finding) {
 	}
 }
 
+// buildFindingContext renders a small window of source text around a
+// finding's line/column. It reads directly from fileContext.Observations
+// (already built once per file, one entry per rune, ordered by line then
+// column) instead of re-decoding the containing line from raw bytes. That
+// keeps the cost O(log N + radius) per finding: decoding the whole line on
+// every call made this O(line length) per finding, which is catastrophic for
+// long lines carrying many findings (e.g. obfuscation markers scattered
+// across a single minified/bundled line).
 func buildFindingContext(fileContext *Context, line, column int) string {
-	if fileContext == nil || line < 1 || line > len(fileContext.LineStarts) {
+	if fileContext == nil || line < 1 {
 		return ""
 	}
 
-	lineStart := fileContext.LineStarts[line-1]
-	lineEnd := len(fileContext.Content)
-	if line < len(fileContext.LineStarts) {
-		lineEnd = fileContext.LineStarts[line] - 1
+	observations := fileContext.Observations
+	lineStart, lineEnd, ok := lineObservationRange(observations, line)
+	if !ok {
+		return ""
 	}
-	for lineEnd > lineStart && (fileContext.Content[lineEnd-1] == '\n' || fileContext.Content[lineEnd-1] == '\r') {
+
+	for lineEnd > lineStart && isLineBreakRune(observations[lineEnd-1].Rune) {
 		lineEnd--
 	}
 
-	lineContent := fileContext.Content[lineStart:lineEnd]
-	if len(lineContent) == 0 {
+	lineRuneCount := lineEnd - lineStart
+	if lineRuneCount == 0 {
 		return ""
 	}
 
-	visible := make([]string, 0, len(lineContent))
 	focusIndex := max(column-1, 0)
-	for offset := 0; offset < len(lineContent); {
-		r, width := utf8.DecodeRune(lineContent[offset:])
-		offset += width
-		visible = append(visible, renderContextRune(r))
-	}
-
-	if len(visible) == 0 {
-		return ""
-	}
-	if focusIndex >= len(visible) {
-		focusIndex = len(visible) - 1
+	if focusIndex >= lineRuneCount {
+		focusIndex = lineRuneCount - 1
 	}
 
 	start := max(focusIndex-contextSnippetRadius, 0)
-	end := min(focusIndex+contextSnippetRadius+1, len(visible))
+	end := min(focusIndex+contextSnippetRadius+1, lineRuneCount)
 
-	snippet := strings.Join(visible[start:end], "")
+	var snippet strings.Builder
 	if start > 0 {
-		snippet = "..." + snippet
+		snippet.WriteString("...")
 	}
-	if end < len(visible) {
-		snippet += "..."
+	for i := lineStart + start; i < lineStart+end; i++ {
+		snippet.WriteString(renderContextRune(observations[i].Rune))
+	}
+	if end < lineRuneCount {
+		snippet.WriteString("...")
 	}
 
-	return snippet
+	return snippet.String()
+}
+
+// lineObservationRange returns the half-open index range [start, end) within
+// observations covering the given 1-based line number. Observations are
+// appended in file order, so Line is non-decreasing across the slice and
+// each boundary can be located with a binary search instead of a scan.
+func lineObservationRange(observations []Observation, line int) (start, end int, ok bool) {
+	start = sort.Search(len(observations), func(i int) bool {
+		return observations[i].Line >= line
+	})
+	if start >= len(observations) || observations[start].Line != line {
+		return 0, 0, false
+	}
+	end = sort.Search(len(observations), func(i int) bool {
+		return observations[i].Line >= line+1
+	})
+	return start, end, true
+}
+
+func isLineBreakRune(r rune) bool {
+	return r == '\n' || r == '\r'
 }
 
 func renderContextRune(r rune) string {
