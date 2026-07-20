@@ -41,6 +41,10 @@ func NewMixedScript() MixedScript {
 }
 
 func (MixedScript) Detect(file File) []finding.Finding {
+	if file.Prepass.Ready && !file.Prepass.HasNonLatinScriptLetter {
+		return nil
+	}
+
 	findings := make([]finding.Finding, 0)
 	tokenStart := -1
 

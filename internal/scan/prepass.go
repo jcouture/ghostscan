@@ -21,55 +21,105 @@
 package scan
 
 import (
+	"context"
+	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jcouture/ghostscan/internal/unicodeutil"
 )
 
-func buildPrepass(text string, observations []Observation) Prepass {
-	prepass := Prepass{Ready: true}
+// categoryScan is the outcome of a single allocation-free pass over a file's
+// decoded runes: which suspicious categories are present, and whether the
+// byte stream contained invalid UTF-8. It deliberately does not depend on a
+// per-rune Observations index - the point of computing it first is to decide
+// whether that (expensive: one 40-byte struct per rune) index needs to be
+// built at all. Most real-world files contain none of these categories, so
+// for those files scanFileWithBinaryCheck skips building Observations
+// (and, transitively, decoder-marker detection) entirely.
+type categoryScan struct {
+	prepass     Prepass
+	invalidUTF8 bool
+}
+
+// needsObservations reports whether any detector could possibly find
+// something given this scan. If not, the per-rune Observations index -
+// and decoder-marker detection, which only matters for correlating with
+// findings that require these same categories - can be skipped.
+func (s categoryScan) needsObservations() bool {
+	p := s.prepass
+	return p.HasInvisible || p.HasPrivateUse || p.HasBidi || p.HasDirectional ||
+		p.HasNonLatinScriptLetter || p.HasCombiningMark
+}
+
+func scanCategories(ctx context.Context, content []byte) (categoryScan, error) {
+	var scan categoryScan
+	scan.prepass.Ready = true
 
 	currentInvisibleRun := 0
 	currentPrivateUseRun := 0
 
-	for _, observation := range observations {
+	for offset := 0; offset < len(content); {
+		if offset%1024 == 0 {
+			select {
+			case <-ctx.Done():
+				return categoryScan{}, fmt.Errorf("context canceled while scanning file: %w", ctx.Err())
+			default:
+			}
+		}
+
+		r, width := utf8.DecodeRune(content[offset:])
+		if r == utf8.RuneError && width == 1 {
+			scan.invalidUTF8 = true
+		}
+
 		switch {
-		case unicodeutil.IsInvisible(observation.Rune):
-			prepass.HasInvisible = true
-			prepass.InvisibleCount++
+		case unicodeutil.IsInvisible(r):
+			scan.prepass.HasInvisible = true
+			scan.prepass.InvisibleCount++
 			currentInvisibleRun++
-			if currentInvisibleRun > prepass.LongestInvisibleRun {
-				prepass.LongestInvisibleRun = currentInvisibleRun
+			if currentInvisibleRun > scan.prepass.LongestInvisibleRun {
+				scan.prepass.LongestInvisibleRun = currentInvisibleRun
 			}
 		default:
 			currentInvisibleRun = 0
 		}
 
 		switch {
-		case unicodeutil.IsPrivateUse(observation.Rune):
-			prepass.HasPrivateUse = true
-			prepass.PrivateUseCount++
+		case unicodeutil.IsPrivateUse(r):
+			scan.prepass.HasPrivateUse = true
+			scan.prepass.PrivateUseCount++
 			currentPrivateUseRun++
-			if currentPrivateUseRun > prepass.LongestPrivateUseRun {
-				prepass.LongestPrivateUseRun = currentPrivateUseRun
+			if currentPrivateUseRun > scan.prepass.LongestPrivateUseRun {
+				scan.prepass.LongestPrivateUseRun = currentPrivateUseRun
 			}
 		default:
 			currentPrivateUseRun = 0
 		}
 
-		if unicodeutil.IsBidiControl(observation.Rune) {
-			prepass.HasBidi = true
-			prepass.BidiCount++
+		if unicodeutil.IsBidiControl(r) {
+			scan.prepass.HasBidi = true
+			scan.prepass.BidiCount++
 		}
-		if unicodeutil.IsSuspiciousDirectionalControl(observation.Rune) {
-			prepass.HasDirectional = true
-			prepass.DirectionalCount++
+		if unicodeutil.IsSuspiciousDirectionalControl(r) {
+			scan.prepass.HasDirectional = true
+			scan.prepass.DirectionalCount++
 		}
+		if !scan.prepass.HasNonLatinScriptLetter {
+			switch unicodeutil.LetterScript(r) {
+			case unicodeutil.ScriptGreek, unicodeutil.ScriptCyrillic:
+				scan.prepass.HasNonLatinScriptLetter = true
+			}
+		}
+		if !scan.prepass.HasCombiningMark && unicodeutil.IsCombiningMark(r) {
+			scan.prepass.HasCombiningMark = true
+		}
+
+		offset += width
 	}
 
-	prepass.DecoderMarkers = detectDecoderMarkers(text, observations)
-	return prepass
+	return scan, nil
 }
 
 func detectDecoderMarkers(text string, observations []Observation) []Marker {

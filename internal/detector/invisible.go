@@ -45,18 +45,20 @@ type Observation struct {
 }
 
 type Prepass struct {
-	Ready                bool
-	HasInvisible         bool
-	HasPrivateUse        bool
-	HasBidi              bool
-	HasDirectional       bool
-	InvisibleCount       int
-	PrivateUseCount      int
-	BidiCount            int
-	DirectionalCount     int
-	LongestInvisibleRun  int
-	LongestPrivateUseRun int
-	DecoderMarkers       []DecoderMarker
+	Ready                   bool
+	HasInvisible            bool
+	HasPrivateUse           bool
+	HasBidi                 bool
+	HasDirectional          bool
+	HasNonLatinScriptLetter bool
+	HasCombiningMark        bool
+	InvisibleCount          int
+	PrivateUseCount         int
+	BidiCount               int
+	DirectionalCount        int
+	LongestInvisibleRun     int
+	LongestPrivateUseRun    int
+	DecoderMarkers          []DecoderMarker
 }
 
 type DecoderMarker struct {

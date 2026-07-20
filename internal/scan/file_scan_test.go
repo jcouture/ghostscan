@@ -93,7 +93,23 @@ func TestScanFileFixtures(t *testing.T) {
 				t.Fatalf("InvalidUTF8 = %v, want %v", got.InvalidUTF8, tt.wantInvalid)
 			}
 
-			assertObservations(t, got.Observations, tt.wantRunes, tt.wantOffsets, tt.wantWidths, tt.wantPositions)
+			// Position tracking is verified against buildObservations
+			// directly rather than got.Observations: scanFile now skips
+			// building the per-rune index entirely for content with nothing
+			// any detector could match (e.g. the plain "ascii file" case
+			// below), which is the whole point of the optimization - but
+			// these fixtures exist specifically to pin down the decode
+			// loop's rune/offset/width/line/column tracking, independent of
+			// whether that content happens to be "interesting".
+			content, err := os.ReadFile(tt.path)
+			if err != nil {
+				t.Fatalf("ReadFile(%q) error = %v", tt.path, err)
+			}
+			observations, err := buildObservations(context.Background(), content)
+			if err != nil {
+				t.Fatalf("buildObservations() error = %v", err)
+			}
+			assertObservations(t, observations, tt.wantRunes, tt.wantOffsets, tt.wantWidths, tt.wantPositions)
 		})
 	}
 }
@@ -101,11 +117,11 @@ func TestScanFileFixtures(t *testing.T) {
 func TestScanFileCRLFPositions(t *testing.T) {
 	t.Parallel()
 
-	path := writeTempFile(t, "crlf.txt", []byte("A\r\nB\r\n"))
+	content := []byte("A\r\nB\r\n")
 
-	got, err := scanFile(context.Background(), path)
+	observations, err := buildObservations(context.Background(), content)
 	if err != nil {
-		t.Fatalf("scanFile() error = %v", err)
+		t.Fatalf("buildObservations() error = %v", err)
 	}
 
 	wantRunes := []rune{'A', '\r', '\n', 'B', '\r', '\n'}
@@ -120,7 +136,7 @@ func TestScanFileCRLFPositions(t *testing.T) {
 		{2, 3},
 	}
 
-	assertObservations(t, got.Observations, wantRunes, wantOffsets, wantWidths, wantPositions)
+	assertObservations(t, observations, wantRunes, wantOffsets, wantWidths, wantPositions)
 }
 
 func TestScanFileInvalidUTF8(t *testing.T) {
@@ -137,6 +153,16 @@ func TestScanFileInvalidUTF8(t *testing.T) {
 		t.Fatal("InvalidUTF8 = false, want true")
 	}
 
+	// scanFile's InvalidUTF8 detection is confirmed above; a lone invalid
+	// byte among otherwise plain ASCII matches none of the categories that
+	// would make scanFile build the per-rune index (see the comment in
+	// TestScanFileFixtures), so the rune/offset/width/position tracking
+	// itself is verified directly against buildObservations instead.
+	observations, err := buildObservations(context.Background(), []byte{'A', 0xff, 'B', '\n'})
+	if err != nil {
+		t.Fatalf("buildObservations() error = %v", err)
+	}
+
 	wantRunes := []rune{'A', utf8.RuneError, 'B', '\n'}
 	wantOffsets := []int{0, 1, 2, 3}
 	wantWidths := []int{1, 1, 1, 1}
@@ -147,7 +173,7 @@ func TestScanFileInvalidUTF8(t *testing.T) {
 		{1, 4},
 	}
 
-	assertObservations(t, got.Observations, wantRunes, wantOffsets, wantWidths, wantPositions)
+	assertObservations(t, observations, wantRunes, wantOffsets, wantWidths, wantPositions)
 }
 
 func TestScanFileCanceled(t *testing.T) {

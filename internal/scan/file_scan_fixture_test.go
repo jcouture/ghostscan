@@ -22,6 +22,7 @@ package scan
 
 import (
 	"context"
+	"os"
 	"testing"
 	"unicode/utf8"
 )
@@ -78,7 +79,21 @@ func TestScanFileInvalidUTF8Fixtures(t *testing.T) {
 				t.Fatal("InvalidUTF8 = false, want true")
 			}
 
-			assertObservations(t, got.Observations, tt.wantRunes, tt.wantOffsets, tt.wantWidths, tt.wantPositions)
+			// Invalid UTF-8 alone (no invisible/private-use/bidi/directional/
+			// non-Latin-script/combining-mark signal) matches none of the
+			// categories that would make scanFile build the per-rune index -
+			// see the comment in TestScanFileFixtures - so rune/offset/width/
+			// position tracking is verified directly against
+			// buildObservations instead of got.Observations.
+			content, err := os.ReadFile(tt.path)
+			if err != nil {
+				t.Fatalf("ReadFile(%q) error = %v", tt.path, err)
+			}
+			observations, err := buildObservations(context.Background(), content)
+			if err != nil {
+				t.Fatalf("buildObservations() error = %v", err)
+			}
+			assertObservations(t, observations, tt.wantRunes, tt.wantOffsets, tt.wantWidths, tt.wantPositions)
 		})
 	}
 }

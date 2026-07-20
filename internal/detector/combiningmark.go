@@ -37,6 +37,10 @@ func NewCombiningMark() CombiningMark {
 }
 
 func (CombiningMark) Detect(file File) []finding.Finding {
+	if file.Prepass.Ready && !file.Prepass.HasCombiningMark {
+		return nil
+	}
+
 	findings := make([]finding.Finding, 0)
 	tokenStart := -1
 

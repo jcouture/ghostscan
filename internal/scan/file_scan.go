@@ -57,8 +57,57 @@ func scanContentWithBinaryCheck(ctx context.Context, path string, content []byte
 
 	lineStarts := buildLineStarts(content)
 	text := string(content)
-	observations := make([]Observation, 0, len(text))
-	invalidUTF8 := false
+
+	scan, err := scanCategories(ctx, content)
+	if err != nil {
+		return nil, err
+	}
+
+	// Most real-world files contain none of these categories. Building the
+	// full per-rune Observations index costs one 40-byte struct per rune -
+	// on a 5MB text file that is ~200MB, paid whether or not anything is
+	// ever found - so skip it entirely when the category scan already rules
+	// out every detector finding anything. Decoder-marker detection is
+	// skipped along with it: markers only matter for correlating with
+	// findings that require these same categories to exist in the first
+	// place, so with none present there is nothing to correlate against.
+	if !scan.needsObservations() {
+		return &Context{
+			Path:        path,
+			Content:     content,
+			Text:        text,
+			LineStarts:  lineStarts,
+			InvalidUTF8: scan.invalidUTF8,
+			Prepass:     scan.prepass,
+		}, nil
+	}
+
+	observations, err := buildObservations(ctx, content)
+	if err != nil {
+		return nil, err
+	}
+
+	prepass := scan.prepass
+	prepass.DecoderMarkers = detectDecoderMarkers(text, observations)
+
+	return &Context{
+		Path:         path,
+		Content:      content,
+		Text:         text,
+		LineStarts:   lineStarts,
+		Observations: observations,
+		InvalidUTF8:  scan.invalidUTF8,
+		Prepass:      prepass,
+	}, nil
+}
+
+// buildObservations decodes content into one Observation per rune, tracking
+// byte offset, line, and column. It is the full per-rune index detectors use
+// to locate and report findings; scanContentWithBinaryCheck only calls it
+// when scanCategories has already found something that could turn into a
+// finding, since it costs one 40-byte struct per rune of the file.
+func buildObservations(ctx context.Context, content []byte) ([]Observation, error) {
+	observations := make([]Observation, 0, len(content))
 	line := 1
 	column := 1
 
@@ -72,9 +121,6 @@ func scanContentWithBinaryCheck(ctx context.Context, path string, content []byte
 		}
 
 		r, width := utf8.DecodeRune(content[offset:])
-		if r == utf8.RuneError && width == 1 {
-			invalidUTF8 = true
-		}
 
 		observations = append(observations, Observation{
 			Rune:       r,
@@ -93,13 +139,5 @@ func scanContentWithBinaryCheck(ctx context.Context, path string, content []byte
 		offset += width
 	}
 
-	return &Context{
-		Path:         path,
-		Content:      content,
-		Text:         text,
-		LineStarts:   lineStarts,
-		Observations: observations,
-		InvalidUTF8:  invalidUTF8,
-		Prepass:      buildPrepass(text, observations),
-	}, nil
+	return observations, nil
 }
