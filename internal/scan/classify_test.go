@@ -151,18 +151,123 @@ func TestClassifyFindingRegion(t *testing.T) {
 		{name: "token", shape: fileShapeCodeLike, content: "const pa\u200Bss = 1;\n", line: 1, column: 9, want: regionTokenLike},
 		{name: "prose", shape: fileShapeProseLike, content: "This sentence contains a hidden,\u200B quiet mark for prose.\n", line: 1, column: 33, want: regionProseLike},
 		{name: "unknown", shape: fileShapeUnknown, content: "alpha \u200B omega\n", line: 1, column: 7, want: regionUnknown},
+
+		// Quote-parity edge cases for the lineMarkerIndex-based rewrite of
+		// isQuotedStringLiteralRegion (previously hasOpenQuoteBefore, which
+		// rescanned the whole line per finding).
+		{name: "single-quote string", shape: fileShapeCodeLike, content: "const label = 'ab\u200Bcd';\n", want: regionStringLike},
+		{name: "backtick string", shape: fileShapeCodeLike, content: "const label = `ab\u200Bcd`;\n", want: regionStringLike},
+		{
+			name:    "escaped quote before marker still counts as inside string",
+			shape:   fileShapeCodeLike,
+			content: "const s = \"a\\\"b\u200Bc\";\n",
+			want:    regionStringLike,
+		},
+		{
+			// Two complete quoted strings precede the marker (even quote
+			// parity), so it is not inside a string despite quotes on the
+			// line; it sits directly after a letter, so it reads as a token.
+			name:    "even quote parity is not string-like",
+			shape:   fileShapeCodeLike,
+			content: "const a = \"x\", b\u200B = \"y\";\n",
+			want:    regionTokenLike,
+		},
+
+		// Key/value separator branch of isStringLikeRegion (dataLike shape).
+		{name: "data kv value after colon", shape: fileShapeDataLike, content: "name: va\u200Blue\n", want: regionStringLike},
+		{name: "data kv value after equals", shape: fileShapeDataLike, content: "name = va\u200Blue\n", want: regionStringLike},
+		{
+			// Separator found, but nothing but whitespace between it and the
+			// marker; a non-space neighbor right after the marker keeps this
+			// out of the whitespace-region short circuit.
+			name:    "data kv separator with only whitespace before marker",
+			shape:   fileShapeDataLike,
+			content: "name:   \u200Bx\n",
+			want:    regionTokenLike,
+		},
+
+		// Block comment open/close ordering for the lineMarkerIndex-based
+		// rewrite of isCommentLikeRegion.
+		{name: "inside open block comment", shape: fileShapeCodeLike, content: "/* start \u200B end */\n", want: regionCommentLike},
+		{
+			name:    "after a closed block comment is not comment-like",
+			shape:   fileShapeCodeLike,
+			content: "/* c */ x\u200By\n",
+			want:    regionTokenLike,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx := scanTextForTest(t, tt.content)
-			item := finding.Finding{Path: ctx.Path, Line: tt.line, Column: tt.column, RuleID: detector.InvisibleRuleID, Evidence: "<U+200B ZERO WIDTH SPACE>"}
-			if got := classifyFindingRegion(ctx, tt.shape, buildObservationIndex(ctx.Observations), item); got != tt.want {
+			line, column := tt.line, tt.column
+			if column == 0 {
+				line, column = firstObservationPosition(t, ctx, '\u200B')
+			}
+			item := finding.Finding{Path: ctx.Path, Line: line, Column: column, RuleID: detector.InvisibleRuleID, Evidence: "<U+200B ZERO WIDTH SPACE>"}
+			if got := classifyFindingRegion(ctx, tt.shape, buildObservationIndex(ctx.Observations), newClassifyCaches(), item); got != tt.want {
 				t.Fatalf("region = %q, want %q", got, tt.want)
 			}
 		})
 	}
 }
+
+// firstObservationPosition finds the (line, column) of the first Observation
+// matching r, so tests can target a marker rune in hand-written content
+// without hand-counting rune columns.
+func firstObservationPosition(t *testing.T, ctx *Context, r rune) (line, column int) {
+	t.Helper()
+	for _, obs := range ctx.Observations {
+		if obs.Rune == r {
+			return obs.Line, obs.Column
+		}
+	}
+	t.Fatalf("no observation for %q found in scanned content", r)
+	return 0, 0
+}
+
+// TestClassifyFindingRegionMultipleFindingsShareLineCache pins down that
+// classifyCaches - shared across every finding in a file via
+// classifyAndFilterFindings - classifies findings at different offsets on
+// the *same* line correctly and independently, even though the line's text
+// and marker index are computed once and reused. This is exactly the
+// sharing that made the pre-fix implementation O(findings * line length):
+// a regression that made the cache "sticky" to the first finding's position
+// would silently misclassify every other finding on the line.
+func TestClassifyFindingRegionMultipleFindingsShareLineCache(t *testing.T) {
+	t.Parallel()
+
+	content := "const label = \"ab\u200Bcd\";" +
+		strings.Repeat(" ", 15) + "\u200B" + strings.Repeat(" ", 15) +
+		"// comment\u200B text here\n"
+	ctx := scanTextForTest(t, content)
+
+	var positions []struct{ line, column int }
+	for _, obs := range ctx.Observations {
+		if obs.Rune == '\u200B' {
+			positions = append(positions, struct{ line, column int }{obs.Line, obs.Column})
+		}
+	}
+	if len(positions) != 3 {
+		t.Fatalf("found %d ZWSP observations, want 3", len(positions))
+	}
+
+	obsIndex := buildObservationIndex(ctx.Observations)
+	caches := newClassifyCaches()
+	want := []string{regionStringLike, regionWhitespaceLike, regionCommentLike}
+
+	for i, pos := range positions {
+		item := finding.Finding{Path: ctx.Path, Line: pos.line, Column: pos.column, RuleID: detector.InvisibleRuleID, Evidence: "<U+200B ZERO WIDTH SPACE>"}
+		if got := classifyFindingRegion(ctx, fileShapeCodeLike, obsIndex, caches, item); got != want[i] {
+			t.Fatalf("finding %d at (%d,%d): region = %q, want %q", i, pos.line, pos.column, got, want[i])
+		}
+	}
+}
+
+// Allocation-precision regression coverage for the O(findings * line
+// length) blowup (region classification rescanning the whole containing
+// line per finding) lives in memory_regression_test.go, alongside the
+// equivalent guard for context-snippet rendering.
 
 func TestSeverityPolicy(t *testing.T) {
 	t.Parallel()

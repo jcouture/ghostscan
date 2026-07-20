@@ -74,9 +74,9 @@ func TestBuildFindingContextOutOfRangeLine(t *testing.T) {
 	t.Parallel()
 
 	content := []byte("hello\n")
-	ctx := &Context{
-		Content:    content,
-		LineStarts: buildLineStarts(content),
+	ctx, err := scanContentWithBinaryCheck(context.Background(), "test.txt", content, false)
+	if err != nil {
+		t.Fatalf("scanContentWithBinaryCheck() error = %v", err)
 	}
 
 	got := buildFindingContext(ctx, 999, 1)
@@ -89,9 +89,9 @@ func TestBuildFindingContextZeroLine(t *testing.T) {
 	t.Parallel()
 
 	content := []byte("hello\n")
-	ctx := &Context{
-		Content:    content,
-		LineStarts: buildLineStarts(content),
+	ctx, err := scanContentWithBinaryCheck(context.Background(), "test.txt", content, false)
+	if err != nil {
+		t.Fatalf("scanContentWithBinaryCheck() error = %v", err)
 	}
 
 	got := buildFindingContext(ctx, 0, 1)
@@ -211,9 +211,9 @@ func TestBuildFindingContextEmptyLine(t *testing.T) {
 
 	// Line 2 is empty (just "\n"), so lineContent is empty → returns "".
 	content := []byte("first\n\nthird\n")
-	ctx := &Context{
-		Content:    content,
-		LineStarts: buildLineStarts(content),
+	ctx, err := scanContentWithBinaryCheck(context.Background(), "test.txt", content, false)
+	if err != nil {
+		t.Fatalf("scanContentWithBinaryCheck() error = %v", err)
 	}
 
 	got := buildFindingContext(ctx, 2, 1)
@@ -233,9 +233,9 @@ func TestBuildFindingContextRightEllipsis(t *testing.T) {
 		line[i] = 'a'
 	}
 	line = append(line, '\n')
-	ctx := &Context{
-		Content:    line,
-		LineStarts: buildLineStarts(line),
+	ctx, err := scanContentWithBinaryCheck(context.Background(), "test.txt", line, false)
+	if err != nil {
+		t.Fatalf("scanContentWithBinaryCheck() error = %v", err)
 	}
 
 	got := buildFindingContext(ctx, 1, 1)

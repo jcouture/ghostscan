@@ -21,6 +21,7 @@
 package scan
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -89,16 +90,17 @@ func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Findi
 		role:  classifyFileRole(fileContext.Path),
 	}
 	obsIndex := buildObservationIndex(fileContext.Observations)
+	caches := newClassifyCaches()
 
 	filtered := findings[:0]
 	for _, item := range findings {
 		if isSuppressedFileStartBOM(fileContext, item) {
 			continue
 		}
-		if isSuppressedLowSignalInvisible(fileContext, classification, obsIndex, item) {
+		if isSuppressedLowSignalInvisible(fileContext, classification, obsIndex, caches, item) {
 			continue
 		}
-		item.Severity = classifyFindingSeverity(fileContext, classification, obsIndex, item)
+		item.Severity = classifyFindingSeverity(fileContext, classification, obsIndex, caches, item)
 		item.Message = classifyFindingMessage(classification, item)
 		filtered = append(filtered, item)
 	}
@@ -116,18 +118,16 @@ func isSuppressedFileStartBOM(fileContext *Context, item Finding) bool {
 	return first.ByteOffset == 0 && first.Rune == '\uFEFF' && suspiciousRuneCountForFinding(item) == 1
 }
 
-func classifyFindingSeverity(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, item Finding) Severity {
-	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, item)
+func classifyFindingSeverity(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) Severity {
+	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, caches, item)
 	profile := classifySequenceProfile(suspiciousRuneCountForFinding(item))
-	line := lineText(fileContext, item.Line)
-	before, after := splitLineAroundColumn(line, item.Column)
 
 	var severity Severity
 	switch item.RuleID {
 	case detector.BidiRuleID:
 		return SeverityHigh
 	case detector.PrivateUseRuleID:
-		severity = privateUseSeverity(classification.shape, region, profile, isQuotedStringLiteralRegion(before, after))
+		severity = privateUseSeverity(classification.shape, region, profile, findingIsQuotedStringLiteral(fileContext, obsIndex, caches, item))
 	case detector.InvisibleRuleID:
 		severity = invisibleSeverity(classification, region, profile, invisibleTraitsForFinding(item))
 	case detector.PayloadRuleID:
@@ -144,7 +144,7 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 	return severity
 }
 
-func isSuppressedLowSignalInvisible(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, item Finding) bool {
+func isSuppressedLowSignalInvisible(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) bool {
 	if item.RuleID != detector.InvisibleRuleID {
 		return false
 	}
@@ -155,7 +155,7 @@ func isSuppressedLowSignalInvisible(fileContext *Context, classification fileCla
 		return false
 	}
 
-	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, item)
+	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, caches, item)
 	if region == regionTokenLike {
 		return false
 	}
@@ -165,8 +165,8 @@ func isSuppressedLowSignalInvisible(fileContext *Context, classification fileCla
 		return false
 	}
 
-	line := lineText(fileContext, item.Line)
-	before, after := splitLineAroundColumn(line, item.Column)
+	line := caches.line(fileContext, item.Line)
+	before, after := findingLineSplit(fileContext, obsIndex, caches, item)
 	if isSensitiveBuildOrExecContext(classification, line, before, after) {
 		return false
 	}
@@ -596,8 +596,8 @@ func naturalWordCount(text string) int {
 	return count
 }
 
-func classifyFindingRegion(fileContext *Context, shape string, obsIndex map[posKey]Observation, item Finding) string {
-	observation, ok := obsIndex[posKey{item.Line, item.Column}]
+func classifyFindingRegion(fileContext *Context, shape string, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) string {
+	observation, offset, ok := findingObservationOffset(fileContext, obsIndex, item)
 	if !ok {
 		return regionUnknown
 	}
@@ -605,26 +605,50 @@ func classifyFindingRegion(fileContext *Context, shape string, obsIndex map[posK
 		return regionFileStart
 	}
 
-	line := lineText(fileContext, item.Line)
-	before, after := splitLineAroundColumn(line, item.Column)
-	trimmed := strings.TrimSpace(line)
+	line := caches.line(fileContext, item.Line)
+	before, after := splitLineAtObservation(fileContext, line, item.Line, observation)
+	trimmed := caches.trimmedLine(fileContext, item.Line)
+	idx := caches.markerIndex(fileContext, item.Line)
+	focusEnd := offset + observation.Width
 
-	if isWhitespaceLikeRegion(line, item.Column) {
+	if isWhitespaceLikeRegion(before, after) {
 		return regionWhitespaceLike
 	}
-	if isStringLikeRegion(shape, before, after) {
+	if isStringLikeRegion(shape, idx, offset, focusEnd, before) {
 		return regionStringLike
 	}
-	if isCommentLikeRegion(line, before, after, trimmed) {
+	if isCommentLikeRegion(idx, trimmed, offset, focusEnd) {
 		return regionCommentLike
 	}
 	if isTokenLikeRegion(before, after) {
 		return regionTokenLike
 	}
-	if shape == fileShapeProseLike && naturalWordCount(line) >= 5 {
+	if shape == fileShapeProseLike && caches.isProseLike(fileContext, item.Line) {
 		return regionProseLike
 	}
 	return regionUnknown
+}
+
+// hasAtLeastWords reports whether text contains at least n natural-language
+// words, stopping as soon as the threshold is reached rather than scanning
+// the whole string to produce an exact count.
+func hasAtLeastWords(text string, n int) bool {
+	count := 0
+	inWord := false
+	for _, r := range text {
+		if unicode.IsLetter(r) {
+			if !inWord {
+				count++
+				if count >= n {
+					return true
+				}
+				inWord = true
+			}
+			continue
+		}
+		inWord = false
+	}
+	return false
 }
 
 func isSensitiveBuildOrExecContext(classification fileClassification, line, before, after string) bool {
@@ -664,6 +688,121 @@ func lineText(fileContext *Context, line int) string {
 	return string(fileContext.Content[start:end])
 }
 
+// classifyCaches memoizes per-line data used during region and severity
+// classification. A single line can carry many findings (e.g. obfuscation
+// markers scattered across one long minified/bundled line); without this,
+// lineText's copy, the prose word-count check, and the quote/separator/
+// comment marker scan below would each redo the same O(line length) work
+// once per finding instead of once per distinct line.
+type classifyCaches struct {
+	lines   map[int]string
+	trimmed map[int]string
+	prose   map[int]bool
+	markers map[int]lineMarkerIndex
+}
+
+func newClassifyCaches() *classifyCaches {
+	return &classifyCaches{
+		lines:   make(map[int]string),
+		trimmed: make(map[int]string),
+		prose:   make(map[int]bool),
+		markers: make(map[int]lineMarkerIndex),
+	}
+}
+
+func (c *classifyCaches) line(fileContext *Context, lineNumber int) string {
+	if text, ok := c.lines[lineNumber]; ok {
+		return text
+	}
+	text := lineText(fileContext, lineNumber)
+	c.lines[lineNumber] = text
+	return text
+}
+
+func (c *classifyCaches) trimmedLine(fileContext *Context, lineNumber int) string {
+	if text, ok := c.trimmed[lineNumber]; ok {
+		return text
+	}
+	text := strings.TrimSpace(c.line(fileContext, lineNumber))
+	c.trimmed[lineNumber] = text
+	return text
+}
+
+func (c *classifyCaches) isProseLike(fileContext *Context, lineNumber int) bool {
+	if result, ok := c.prose[lineNumber]; ok {
+		return result
+	}
+	result := hasAtLeastWords(c.line(fileContext, lineNumber), 5)
+	c.prose[lineNumber] = result
+	return result
+}
+
+func (c *classifyCaches) markerIndex(fileContext *Context, lineNumber int) lineMarkerIndex {
+	if idx, ok := c.markers[lineNumber]; ok {
+		return idx
+	}
+	idx := buildLineMarkerIndex(c.line(fileContext, lineNumber))
+	c.markers[lineNumber] = idx
+	return idx
+}
+
+// findingObservationOffset resolves a finding's Observation and its byte
+// offset within its line, using the Observation index instead of decoding
+// UTF-8 from the start of the line.
+func findingObservationOffset(fileContext *Context, obsIndex map[posKey]Observation, item Finding) (observation Observation, offset int, ok bool) {
+	if item.Line < 1 || item.Line > len(fileContext.LineStarts) {
+		return Observation{}, 0, false
+	}
+	observation, found := obsIndex[posKey{item.Line, item.Column}]
+	if !found {
+		return Observation{}, 0, false
+	}
+	return observation, observation.ByteOffset - fileContext.LineStarts[item.Line-1], true
+}
+
+// findingIsQuotedStringLiteral reports whether a finding sits inside a
+// quoted string literal on its line, using the line's marker index instead
+// of rescanning the line's full before/after text for every finding.
+func findingIsQuotedStringLiteral(fileContext *Context, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) bool {
+	observation, offset, ok := findingObservationOffset(fileContext, obsIndex, item)
+	if !ok {
+		return false
+	}
+	idx := caches.markerIndex(fileContext, item.Line)
+	return isQuotedStringLiteralRegion(idx, offset, offset+observation.Width)
+}
+
+// findingLineSplit returns the text immediately before and after a finding's
+// rune. It looks up the finding's Observation for its byte offset within the
+// line so the split is an O(1) slice instead of splitLineAroundColumn's
+// O(column) decode from the start of the line.
+func findingLineSplit(fileContext *Context, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) (before, after string) {
+	line := caches.line(fileContext, item.Line)
+	observation, ok := obsIndex[posKey{item.Line, item.Column}]
+	if !ok {
+		return splitLineAroundColumn(line, item.Column)
+	}
+	return splitLineAtObservation(fileContext, line, item.Line, observation)
+}
+
+// splitLineAtObservation splits line into the text before and after
+// observation's rune using the file's already-computed byte offsets,
+// avoiding a re-decode of UTF-8 from the start of the line.
+func splitLineAtObservation(fileContext *Context, line string, lineNumber int, observation Observation) (before, after string) {
+	if lineNumber < 1 || lineNumber > len(fileContext.LineStarts) {
+		return line, ""
+	}
+	offset := observation.ByteOffset - fileContext.LineStarts[lineNumber-1]
+	if offset < 0 || offset > len(line) {
+		return line, ""
+	}
+	end := min(offset+observation.Width, len(line))
+	return line[:offset], line[end:]
+}
+
+// splitLineAroundColumn walks from the start of line to locate column,
+// decoding as it goes. It is a fallback for callers that lack an Observation
+// for the target position; the hot path uses splitLineAtObservation instead.
 func splitLineAroundColumn(line string, column int) (string, string) {
 	runeIndex := 1
 	for offset := 0; offset < len(line); {
@@ -677,74 +816,162 @@ func splitLineAroundColumn(line string, column int) (string, string) {
 	return line, ""
 }
 
-func isWhitespaceLikeRegion(line string, column int) bool {
-	runes := []rune(line)
-	index := column - 1
-	if index < 0 || index >= len(runes) {
-		return false
-	}
-	left := max(index-12, 0)
-	right := min(index+13, len(runes))
-	for i := left; i < right; i++ {
-		if i == index {
-			continue
-		}
-		if !unicode.IsSpace(runes[i]) {
+// isWhitespaceLikeRegion reports whether a finding sits in a run of
+// whitespace, looking only at up to 12 runes on either side of the focus
+// rune. It takes the already-split before/after text (see
+// splitLineAtObservation) rather than the whole line and a column, so the
+// cost is bounded regardless of how long the containing line is.
+func isWhitespaceLikeRegion(before, after string) bool {
+	for _, r := range lastRunes(before, 12) {
+		if !unicode.IsSpace(r) {
 			return false
 		}
+	}
+
+	count := 0
+	for _, r := range after {
+		if count == 12 {
+			break
+		}
+		if !unicode.IsSpace(r) {
+			return false
+		}
+		count++
 	}
 	return true
 }
 
-func isStringLikeRegion(shape, before, after string) bool {
-	if isQuotedStringLiteralRegion(before, after) {
-		return true
+// lastRunes returns up to the last limit runes of text, decoding backward
+// from the end so the cost is O(limit) rather than O(len(text)).
+func lastRunes(text string, limit int) []rune {
+	collected := make([]rune, 0, limit)
+	for i := len(text); i > 0 && len(collected) < limit; {
+		r, width := utf8.DecodeLastRuneInString(text[:i])
+		i -= width
+		collected = append(collected, r)
 	}
-	if shape == fileShapeDataLike {
-		separator := max(strings.LastIndex(before, ":"), strings.LastIndex(before, "="))
-		return separator >= 0 && strings.TrimSpace(before[separator+1:]) != ""
-	}
-	return false
+	return collected
 }
 
-func isQuotedStringLiteralRegion(before, after string) bool {
-	for _, quote := range []rune{'\'', '"', '`'} {
-		if hasOpenQuoteBefore(before, quote) && strings.ContainsRune(after, quote) {
+// lineMarkerIndex precomputes, for a single line, the sorted byte offsets of
+// the syntax markers region classification cares about: quote characters
+// (escape-aware), key/value separators, and line/block comment delimiters.
+// Region checks answer "is there a marker before/after this offset" via
+// binary search over these positions instead of rescanning the line's full
+// before/after text for every finding - a line can carry many findings (e.g.
+// obfuscation markers scattered across one long line), so per-finding
+// rescans are O(findings * line length).
+type lineMarkerIndex struct {
+	quotePositions             map[rune][]int
+	colonPositions             []int
+	equalsPositions            []int
+	lineCommentPositions       []int
+	blockCommentOpenPositions  []int
+	blockCommentClosePositions []int
+}
+
+func buildLineMarkerIndex(line string) lineMarkerIndex {
+	idx := lineMarkerIndex{quotePositions: make(map[rune][]int, 3)}
+	escaped := false
+	prevRune := rune(-1)
+	prevOffset := -1
+	for offset, r := range line {
+		switch r {
+		case ':':
+			idx.colonPositions = append(idx.colonPositions, offset)
+		case '=':
+			idx.equalsPositions = append(idx.equalsPositions, offset)
+		}
+		if prevRune == '/' && r == '/' {
+			idx.lineCommentPositions = append(idx.lineCommentPositions, prevOffset)
+		}
+		if prevRune == '/' && r == '*' {
+			idx.blockCommentOpenPositions = append(idx.blockCommentOpenPositions, prevOffset)
+		}
+		if prevRune == '*' && r == '/' {
+			idx.blockCommentClosePositions = append(idx.blockCommentClosePositions, prevOffset)
+		}
+
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '\'' || r == '"' || r == '`':
+			idx.quotePositions[r] = append(idx.quotePositions[r], offset)
+		}
+
+		prevRune = r
+		prevOffset = offset
+	}
+	return idx
+}
+
+// countBefore returns how many entries of the sorted positions slice are
+// strictly less than offset, via binary search.
+func countBefore(positions []int, offset int) int {
+	return sort.Search(len(positions), func(i int) bool { return positions[i] >= offset })
+}
+
+func hasBefore(positions []int, offset int) bool {
+	return countBefore(positions, offset) > 0
+}
+
+func hasFrom(positions []int, offset int) bool {
+	index := sort.Search(len(positions), func(i int) bool { return positions[i] >= offset })
+	return index < len(positions)
+}
+
+func lastBefore(positions []int, offset int) int {
+	count := countBefore(positions, offset)
+	if count == 0 {
+		return -1
+	}
+	return positions[count-1]
+}
+
+// hasNonWhitespaceBetween reports whether text contains any non-whitespace
+// rune, stopping at the first one found rather than scanning it all.
+func hasNonWhitespaceBetween(text string) bool {
+	for _, r := range text {
+		if !unicode.IsSpace(r) {
 			return true
 		}
 	}
 	return false
 }
 
-func hasOpenQuoteBefore(text string, quote rune) bool {
-	count := 0
-	escaped := false
-	for _, r := range text {
-		if escaped {
-			escaped = false
-			continue
-		}
-		if r == '\\' {
-			escaped = true
-			continue
-		}
-		if r == quote {
-			count++
-		}
+func isStringLikeRegion(shape string, idx lineMarkerIndex, offset, focusEnd int, before string) bool {
+	if isQuotedStringLiteralRegion(idx, offset, focusEnd) {
+		return true
 	}
-	return count%2 == 1
+	if shape == fileShapeDataLike {
+		separator := max(lastBefore(idx.colonPositions, offset), lastBefore(idx.equalsPositions, offset))
+		return separator >= 0 && hasNonWhitespaceBetween(before[separator+1:])
+	}
+	return false
 }
 
-func isCommentLikeRegion(line, before, after, trimmed string) bool {
+func isQuotedStringLiteralRegion(idx lineMarkerIndex, offset, focusEnd int) bool {
+	for _, quote := range []rune{'\'', '"', '`'} {
+		positions := idx.quotePositions[quote]
+		if countBefore(positions, offset)%2 == 1 && hasFrom(positions, focusEnd) {
+			return true
+		}
+	}
+	return false
+}
+
+func isCommentLikeRegion(idx lineMarkerIndex, trimmed string, offset, focusEnd int) bool {
 	if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") || strings.HasPrefix(trimmed, "<!--") {
 		return true
 	}
-	if strings.Contains(before, "//") {
+	if hasBefore(idx.lineCommentPositions, offset) {
 		return true
 	}
-	open := strings.LastIndex(before, "/*")
-	closeBefore := strings.LastIndex(before, "*/")
-	return open >= 0 && open > closeBefore && strings.Contains(after, "*/")
+	open := lastBefore(idx.blockCommentOpenPositions, offset)
+	closeBefore := lastBefore(idx.blockCommentClosePositions, offset)
+	return open >= 0 && open > closeBefore && hasFrom(idx.blockCommentClosePositions, focusEnd)
 }
 
 func isTokenLikeRegion(before, after string) bool {
@@ -790,15 +1017,19 @@ func firstNonSuspiciousRune(text string) rune {
 }
 
 func lastVisibleRunes(text string, limit int) string {
-	runes := []rune(text)
-	out := make([]rune, 0, limit)
-	for i := len(runes) - 1; i >= 0 && len(out) < limit; i-- {
-		if isSuspiciousRune(runes[i]) {
+	collected := make([]rune, 0, limit)
+	for i := len(text); i > 0 && len(collected) < limit; {
+		r, width := utf8.DecodeLastRuneInString(text[:i])
+		i -= width
+		if isSuspiciousRune(r) {
 			continue
 		}
-		out = append([]rune{runes[i]}, out...)
+		collected = append(collected, r)
 	}
-	return string(out)
+	for l, r := 0, len(collected)-1; l < r; l, r = l+1, r-1 {
+		collected[l], collected[r] = collected[r], collected[l]
+	}
+	return string(collected)
 }
 
 func firstVisibleRunes(text string, limit int) string {
