@@ -56,11 +56,21 @@
 // and wall-clock time for the CPU-heavy, allocation-light ones (quote
 // parity, the data-shape separator lookup, comment-marker detection) -
 // because a regression can show up in either one without the other moving.
+//
+// A second, distinct bug lives here too:
+// TestScanFileDetailedBytesBoundedForFilesWithNoFindings guards a cause of
+// excessive memory use that has nothing to do with findings at all -
+// scanContentWithBinaryCheck used to build the same 40-byte-per-rune
+// Observations index for *every* scanned file regardless of whether
+// anything was ever found, so a tree of large, entirely clean files could
+// exhaust memory on its own. See prepass_scan_test.go for the category-scan
+// unit tests this fix's gating logic is built on.
 
 package scan
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -404,5 +414,64 @@ func TestPathologicalInputsCompleteQuickly(t *testing.T) {
 				t.Errorf("scan took %s for %d findings on a %d-byte line; want under %s", elapsed, len(result.Findings), tt.lineLength, tt.budget)
 			}
 		})
+	}
+}
+
+// TestScanFileDetailedBytesBoundedForFilesWithNoFindings is the regression
+// guard for a related but distinct OOM cause from the rest of this file:
+// scanContentWithBinaryCheck used to build one 40-byte Observation per rune
+// of *every* scanned file, whether or not anything suspicious was ever
+// found. A tree of large, entirely clean files - no findings anywhere -
+// could exhaust memory this way on its own, independent of any per-finding
+// cost, because the cost was paid per file regardless of what (if anything)
+// it contained. The fix (scanCategories in prepass.go) only builds that
+// index when an allocation-free category scan has already found something
+// a detector could act on.
+//
+// Verified live before writing this test: 40 real files totaling 167MB of
+// clean JS-shaped content (zero findings) peaked at 7.7-9.1GB RSS on the
+// actual ghostscan binary before this fix, and ~86MB after - which is why
+// the bound below is generous (5x) rather than tight: it only needs to
+// reject a return of the ~40-180x blowup, not chase the exact constant.
+func TestScanFileDetailedBytesBoundedForFilesWithNoFindings(t *testing.T) {
+	const fileCount = 20
+	const fileSize = 200_000
+
+	engine := NewEngine()
+	paths := make([]string, 0, fileCount)
+	totalContentBytes := 0
+
+	for i := range fileCount {
+		var sb strings.Builder
+		sb.Grow(fileSize)
+		for sb.Len() < fileSize {
+			sb.WriteString("const value = computeSomething(a, b, c);\n")
+		}
+		content := sb.String()
+
+		path := filepath.Join(t.TempDir(), fmt.Sprintf("clean%d.js", i))
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+		paths = append(paths, path)
+		totalContentBytes += len(content)
+	}
+
+	bytesPerRun, _ := allocStatsPerRun(3, func() {
+		for _, path := range paths {
+			result, err := engine.ScanTrustedTextFileDetailed(context.Background(), path)
+			if err != nil {
+				t.Fatalf("ScanTrustedTextFileDetailed() error = %v", err)
+			}
+			if len(result.Findings) != 0 {
+				t.Fatalf("ScanTrustedTextFileDetailed() findings = %v, want none", result.Findings)
+			}
+		}
+	})
+
+	ratio := bytesPerRun / float64(totalContentBytes)
+	t.Logf("scanned %d clean files totaling %d bytes: %.0f B allocated (%.2fx content size)", fileCount, totalContentBytes, bytesPerRun, ratio)
+	if ratio > 5 {
+		t.Errorf("allocated %.0f bytes scanning %d bytes of clean content (%.2fx); want well under the ~40x an unconditional per-rune Observations build produces", bytesPerRun, totalContentBytes, ratio)
 	}
 }

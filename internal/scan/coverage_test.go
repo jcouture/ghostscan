@@ -227,12 +227,16 @@ func TestBuildFindingContextEmptyLine(t *testing.T) {
 func TestBuildFindingContextRightEllipsis(t *testing.T) {
 	t.Parallel()
 
-	// 50-char line; column 1 → focusIndex=0, end=21 < 50 → appends "..."
-	line := make([]byte, 50)
+	// 50-rune line (49 'a's + one ZWSP marker so the file has something to
+	// find - buildFindingContext is only ever called for an actual finding
+	// in production, which is why scanContentWithBinaryCheck only builds
+	// Observations when the category scan finds a marker like this one);
+	// column 1 -> focusIndex=0, end=21 < 50 -> appends "..."
+	line := make([]byte, 49)
 	for i := range line {
 		line[i] = 'a'
 	}
-	line = append(line, '\n')
+	line = append(line, []byte("​\n")...)
 	ctx, err := scanContentWithBinaryCheck(context.Background(), "test.txt", line, false)
 	if err != nil {
 		t.Fatalf("scanContentWithBinaryCheck() error = %v", err)

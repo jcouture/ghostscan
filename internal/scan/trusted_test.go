@@ -35,8 +35,8 @@ func TestScanTrustedTextAllowsBinaryContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ScanTrustedTextRaw() error = %v", err)
 	}
-	if len(raw.Observations) == 0 {
-		t.Fatal("ScanTrustedTextRaw() observations = 0, want scanned content")
+	if len(raw.Content) == 0 {
+		t.Fatal("ScanTrustedTextRaw() content = 0, want scanned content")
 	}
 
 	result, err := NewEngine().ScanTrustedTextFileDetailed(context.Background(), path)
@@ -51,8 +51,8 @@ func TestScanTrustedTextAllowsBinaryContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scanTrustedTextFile() error = %v", err)
 	}
-	if len(direct.Observations) == 0 {
-		t.Fatal("scanTrustedTextFile() observations = 0, want scanned content")
+	if len(direct.Content) == 0 {
+		t.Fatal("scanTrustedTextFile() content = 0, want scanned content")
 	}
 }
 

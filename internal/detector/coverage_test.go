@@ -94,6 +94,37 @@ func TestPayloadPrepassSkipsWhenNothingSuspicious(t *testing.T) {
 	}
 }
 
+func TestMixedScriptPrepassSkipsWhenNoNonLatinScript(t *testing.T) {
+	t.Parallel()
+
+	// Content mixes scripts (Latin + Greek), which would normally trigger a
+	// finding; the Prepass override below simulates the category scan
+	// having found no Greek/Cyrillic anywhere in the file; MixedScript must
+	// trust that and skip without inspecting Observations.
+	file := testFileFromText("test.go", "aπ")
+	file.Prepass = Prepass{Ready: true, HasNonLatinScriptLetter: false}
+
+	got := MixedScript{}.Detect(file)
+	if got != nil {
+		t.Fatalf("MixedScript.Detect() = %v, want nil when prepass reports no non-Latin script letter", got)
+	}
+}
+
+func TestCombiningMarkPrepassSkipsWhenNoCombiningMark(t *testing.T) {
+	t.Parallel()
+
+	// Content has a base letter followed by a combining mark, which would
+	// normally trigger a finding; the Prepass override simulates the
+	// category scan having found no combining marks anywhere in the file.
+	file := testFileFromText("test.go", "á")
+	file.Prepass = Prepass{Ready: true, HasCombiningMark: false}
+
+	got := CombiningMark{}.Detect(file)
+	if got != nil {
+		t.Fatalf("CombiningMark.Detect() = %v, want nil when prepass reports no combining mark", got)
+	}
+}
+
 // --- Decoder helpers ---
 
 func TestCorrelationPlural(t *testing.T) {
