@@ -123,7 +123,7 @@ func buildFileResult(fileContext *Context) FileResult {
 		Prepass:      fileContext.Prepass,
 	}
 
-	findings := make([]Finding, 0, len(fileContext.Observations))
+	findings := make([]Finding, 0)
 	findings = append(findings, detector.NewInvisible().Detect(file)...)
 	findings = append(findings, detector.NewPrivateUse().Detect(file)...)
 	findings = append(findings, detector.NewBidi().Detect(file)...)

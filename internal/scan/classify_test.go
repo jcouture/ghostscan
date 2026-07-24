@@ -205,7 +205,7 @@ func TestClassifyFindingRegion(t *testing.T) {
 				line, column = firstObservationPosition(t, ctx, '\u200B')
 			}
 			item := finding.Finding{Path: ctx.Path, Line: line, Column: column, RuleID: detector.InvisibleRuleID, Evidence: "<U+200B ZERO WIDTH SPACE>"}
-			if got := classifyFindingRegion(ctx, tt.shape, buildObservationIndex(ctx.Observations), newClassifyCaches(), item); got != tt.want {
+			if got := classifyFindingRegion(ctx, tt.shape, newClassifyCaches(), item); got != tt.want {
 				t.Fatalf("region = %q, want %q", got, tt.want)
 			}
 		})
@@ -252,13 +252,12 @@ func TestClassifyFindingRegionMultipleFindingsShareLineCache(t *testing.T) {
 		t.Fatalf("found %d ZWSP observations, want 3", len(positions))
 	}
 
-	obsIndex := buildObservationIndex(ctx.Observations)
 	caches := newClassifyCaches()
 	want := []string{regionStringLike, regionWhitespaceLike, regionCommentLike}
 
 	for i, pos := range positions {
 		item := finding.Finding{Path: ctx.Path, Line: pos.line, Column: pos.column, RuleID: detector.InvisibleRuleID, Evidence: "<U+200B ZERO WIDTH SPACE>"}
-		if got := classifyFindingRegion(ctx, fileShapeCodeLike, obsIndex, caches, item); got != want[i] {
+		if got := classifyFindingRegion(ctx, fileShapeCodeLike, caches, item); got != want[i] {
 			t.Fatalf("finding %d at (%d,%d): region = %q, want %q", i, pos.line, pos.column, got, want[i])
 		}
 	}

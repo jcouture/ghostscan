@@ -27,6 +27,9 @@ go.work.sum
 .gocache/
 .gomodcache/
 
+# Local pprof/benchstat scratch captures
+perf/
+
 # env file
 .env
 
