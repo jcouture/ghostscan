@@ -67,16 +67,26 @@ type invisibleTraits struct {
 	onlyFEFF bool
 }
 
-type posKey struct {
-	line, column int
-}
-
-func buildObservationIndex(observations []Observation) map[posKey]Observation {
-	index := make(map[posKey]Observation, len(observations))
-	for _, obs := range observations {
-		index[posKey{obs.Line, obs.Column}] = obs
+// findObservation looks up the Observation at (line, column) via binary
+// search. Observations are produced by buildObservations in strict
+// ascending (Line, Column) order (line increases monotonically; column
+// resets to 1 on each newline and increases monotonically within a line),
+// so the slice never needs a separate index: a handful of per-finding
+// lookups against an O(n)-sized map cost more to build (one entry per rune
+// of the file, whether or not it is ever queried) than doing O(log n)
+// binary search directly against the slice already on Context.
+func findObservation(observations []Observation, line, column int) (Observation, bool) {
+	i, ok := sort.Find(len(observations), func(i int) int {
+		obs := observations[i]
+		if obs.Line != line {
+			return line - obs.Line
+		}
+		return column - obs.Column
+	})
+	if !ok {
+		return Observation{}, false
 	}
-	return index
+	return observations[i], true
 }
 
 func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Finding {
@@ -89,7 +99,6 @@ func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Findi
 		shape: shape,
 		role:  classifyFileRole(fileContext.Path),
 	}
-	obsIndex := buildObservationIndex(fileContext.Observations)
 	caches := newClassifyCaches()
 
 	filtered := findings[:0]
@@ -97,10 +106,10 @@ func classifyAndFilterFindings(fileContext *Context, findings []Finding) []Findi
 		if isSuppressedFileStartBOM(fileContext, item) {
 			continue
 		}
-		if isSuppressedLowSignalInvisible(fileContext, classification, obsIndex, caches, item) {
+		if isSuppressedLowSignalInvisible(fileContext, classification, caches, item) {
 			continue
 		}
-		item.Severity = classifyFindingSeverity(fileContext, classification, obsIndex, caches, item)
+		item.Severity = classifyFindingSeverity(fileContext, classification, caches, item)
 		item.Message = classifyFindingMessage(classification, item)
 		filtered = append(filtered, item)
 	}
@@ -118,8 +127,8 @@ func isSuppressedFileStartBOM(fileContext *Context, item Finding) bool {
 	return first.ByteOffset == 0 && first.Rune == '\uFEFF' && suspiciousRuneCountForFinding(item) == 1
 }
 
-func classifyFindingSeverity(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) Severity {
-	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, caches, item)
+func classifyFindingSeverity(fileContext *Context, classification fileClassification, caches *classifyCaches, item Finding) Severity {
+	region := classifyFindingRegion(fileContext, classification.shape, caches, item)
 	profile := classifySequenceProfile(suspiciousRuneCountForFinding(item))
 
 	var severity Severity
@@ -127,7 +136,7 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 	case detector.BidiRuleID:
 		return SeverityHigh
 	case detector.PrivateUseRuleID:
-		severity = privateUseSeverity(classification.shape, region, profile, findingIsQuotedStringLiteral(fileContext, obsIndex, caches, item))
+		severity = privateUseSeverity(classification.shape, region, profile, findingIsQuotedStringLiteral(fileContext, caches, item))
 	case detector.InvisibleRuleID:
 		severity = invisibleSeverity(classification, region, profile, invisibleTraitsForFinding(item))
 	case detector.PayloadRuleID:
@@ -144,7 +153,7 @@ func classifyFindingSeverity(fileContext *Context, classification fileClassifica
 	return severity
 }
 
-func isSuppressedLowSignalInvisible(fileContext *Context, classification fileClassification, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) bool {
+func isSuppressedLowSignalInvisible(fileContext *Context, classification fileClassification, caches *classifyCaches, item Finding) bool {
 	if item.RuleID != detector.InvisibleRuleID {
 		return false
 	}
@@ -155,7 +164,7 @@ func isSuppressedLowSignalInvisible(fileContext *Context, classification fileCla
 		return false
 	}
 
-	region := classifyFindingRegion(fileContext, classification.shape, obsIndex, caches, item)
+	region := classifyFindingRegion(fileContext, classification.shape, caches, item)
 	if region == regionTokenLike {
 		return false
 	}
@@ -166,7 +175,7 @@ func isSuppressedLowSignalInvisible(fileContext *Context, classification fileCla
 	}
 
 	line := caches.line(fileContext, item.Line)
-	before, after := findingLineSplit(fileContext, obsIndex, caches, item)
+	before, after := findingLineSplit(fileContext, caches, item)
 	if isSensitiveBuildOrExecContext(classification, line, before, after) {
 		return false
 	}
@@ -596,8 +605,8 @@ func naturalWordCount(text string) int {
 	return count
 }
 
-func classifyFindingRegion(fileContext *Context, shape string, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) string {
-	observation, offset, ok := findingObservationOffset(fileContext, obsIndex, item)
+func classifyFindingRegion(fileContext *Context, shape string, caches *classifyCaches, item Finding) string {
+	observation, offset, ok := findingObservationOffset(fileContext, item)
 	if !ok {
 		return regionUnknown
 	}
@@ -749,11 +758,11 @@ func (c *classifyCaches) markerIndex(fileContext *Context, lineNumber int) lineM
 // findingObservationOffset resolves a finding's Observation and its byte
 // offset within its line, using the Observation index instead of decoding
 // UTF-8 from the start of the line.
-func findingObservationOffset(fileContext *Context, obsIndex map[posKey]Observation, item Finding) (observation Observation, offset int, ok bool) {
+func findingObservationOffset(fileContext *Context, item Finding) (observation Observation, offset int, ok bool) {
 	if item.Line < 1 || item.Line > len(fileContext.LineStarts) {
 		return Observation{}, 0, false
 	}
-	observation, found := obsIndex[posKey{item.Line, item.Column}]
+	observation, found := findObservation(fileContext.Observations, item.Line, item.Column)
 	if !found {
 		return Observation{}, 0, false
 	}
@@ -763,8 +772,8 @@ func findingObservationOffset(fileContext *Context, obsIndex map[posKey]Observat
 // findingIsQuotedStringLiteral reports whether a finding sits inside a
 // quoted string literal on its line, using the line's marker index instead
 // of rescanning the line's full before/after text for every finding.
-func findingIsQuotedStringLiteral(fileContext *Context, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) bool {
-	observation, offset, ok := findingObservationOffset(fileContext, obsIndex, item)
+func findingIsQuotedStringLiteral(fileContext *Context, caches *classifyCaches, item Finding) bool {
+	observation, offset, ok := findingObservationOffset(fileContext, item)
 	if !ok {
 		return false
 	}
@@ -776,9 +785,9 @@ func findingIsQuotedStringLiteral(fileContext *Context, obsIndex map[posKey]Obse
 // rune. It looks up the finding's Observation for its byte offset within the
 // line so the split is an O(1) slice instead of splitLineAroundColumn's
 // O(column) decode from the start of the line.
-func findingLineSplit(fileContext *Context, obsIndex map[posKey]Observation, caches *classifyCaches, item Finding) (before, after string) {
+func findingLineSplit(fileContext *Context, caches *classifyCaches, item Finding) (before, after string) {
 	line := caches.line(fileContext, item.Line)
-	observation, ok := obsIndex[posKey{item.Line, item.Column}]
+	observation, ok := findObservation(fileContext.Observations, item.Line, item.Column)
 	if !ok {
 		return splitLineAroundColumn(line, item.Column)
 	}

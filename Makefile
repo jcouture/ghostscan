@@ -18,7 +18,16 @@ BUILD_FLAGS ?= $(strip $(if $(LDFLAGS),-ldflags "$(LDFLAGS)"))
 
 TEST_PKGS ?= ./...
 
-.PHONY: build clean help fmt fix vet gosec vulncheck tidy precommit test install uninstall release-snapshot tag print-version
+# Benchmark and profiling settings (see docs/PERFORMANCE.md)
+BENCH_PKG ?= ./internal/scan
+BENCH ?= .
+BENCHTIME ?= 1s
+COUNT ?= 1
+PERF_DIR ?= perf
+PPROF_HTTP ?= 127.0.0.1:6060
+BENCHSTAT_VERSION ?= v0.0.0-20260709024250-82a0b07e230d
+
+.PHONY: build clean help fmt fix vet gosec vulncheck tidy precommit test install uninstall release-snapshot tag print-version bench pprof pprof-contention benchstat
 
 .DEFAULT_GOAL := help
 
@@ -26,6 +35,30 @@ TEST_PKGS ?= ./...
 test:
 	@go run gotest.tools/gotestsum@v1.13.0 --format=testdox -- -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
 	@go tool cover -func=coverage.out | grep total | awk '{print "Total coverage: " $$3}'
+
+## Run benchmarks (override BENCH_PKG, BENCH, BENCHTIME, COUNT)
+bench:
+	@go test $(BENCH_PKG) -run '^$$' -bench '$(BENCH)' -benchmem -benchtime=$(BENCHTIME) -count=$(COUNT)
+
+## Capture CPU and heap profiles for a benchmark (override BENCH_PKG, BENCH)
+pprof:
+	@mkdir -p $(PERF_DIR)
+	@go test -c $(BENCH_PKG) -o $(CURDIR)/$(PERF_DIR)/bench.test
+	@cd $(BENCH_PKG) && $(CURDIR)/$(PERF_DIR)/bench.test -test.run '^$$' -test.bench '$(BENCH)' -test.benchmem -test.benchtime=$(BENCHTIME) -test.count=1 -test.cpuprofile=$(CURDIR)/$(PERF_DIR)/bench.cpu.pprof -test.memprofile=$(CURDIR)/$(PERF_DIR)/bench.mem.pprof
+	@printf '%s\n' "Profiles written to $(PERF_DIR)/bench.cpu.pprof and $(PERF_DIR)/bench.mem.pprof"
+	@printf '%s\n' "Inspect with: go tool pprof -http=$(PPROF_HTTP) $(PERF_DIR)/bench.test $(PERF_DIR)/bench.cpu.pprof"
+
+## Capture block and mutex profiles for a benchmark (contention; e.g. BENCH_PKG=./internal/app)
+pprof-contention:
+	@mkdir -p $(PERF_DIR)
+	@go test -c $(BENCH_PKG) -o $(CURDIR)/$(PERF_DIR)/bench.test
+	@cd $(BENCH_PKG) && $(CURDIR)/$(PERF_DIR)/bench.test -test.run '^$$' -test.bench '$(BENCH)' -test.benchmem -test.benchtime=$(BENCHTIME) -test.count=1 -test.blockprofile=$(CURDIR)/$(PERF_DIR)/bench.block.pprof -test.mutexprofile=$(CURDIR)/$(PERF_DIR)/bench.mutex.pprof
+	@printf '%s\n' "Profiles written to $(PERF_DIR)/bench.block.pprof and $(PERF_DIR)/bench.mutex.pprof"
+	@printf '%s\n' "Inspect with: go tool pprof -http=$(PPROF_HTTP) $(PERF_DIR)/bench.test $(PERF_DIR)/bench.block.pprof"
+
+## Compare two benchmark captures (usage: make benchstat OLD=perf/a.txt NEW=perf/b.txt)
+benchstat:
+	@go run golang.org/x/perf/cmd/benchstat@$(BENCHSTAT_VERSION) $(OLD) $(NEW)
 
 ## Build the binary
 build:
