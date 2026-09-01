@@ -3,8 +3,7 @@ MODULE ?= github.com/jcouture/ghostscan
 VERSION_PKG ?= $(MODULE)/cmd
 BIN_DIR ?= bin
 BIN ?= $(BIN_DIR)/$(APP)
-GORELEASER ?= go run github.com/goreleaser/goreleaser/v2@v2.16.0
-SVU ?= go run github.com/caarlos0/svu/v3@v3.2.2
+GORELEASER ?= go run github.com/goreleaser/goreleaser/v2@v2.17.0
 
 GOFLAGS ?= -trimpath -buildvcs=false
 GOCACHE_DIR ?= $(CURDIR)/.gocache
@@ -125,12 +124,15 @@ release-snapshot:
 	@$(GORELEASER) release --snapshot --clean
 	@echo "Snapshot artifacts written to dist/"
 
-## Create an annotated semver tag (override with VERSION=vX.Y.Z)
+## Create an annotated semver tag (usage: make tag VERSION=vX.Y.Z)
 tag:
-	@VERSION="$${VERSION:-$$($(SVU) next)}"; \
-	echo "Creating tag $$VERSION"; \
-	git tag -a "$$VERSION" -s -m "Release $$VERSION"; \
-	echo "Created $$VERSION"
+	@if [ "$(origin VERSION)" != "command line" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make tag VERSION=vX.Y.Z" >&2; \
+		exit 2; \
+	fi; \
+	echo "Creating tag $(VERSION)"; \
+	git tag -a "$(VERSION)" -s -m "Release $(VERSION)"; \
+	echo "Created $(VERSION)"
 
 ## Clean build artifacts
 clean:

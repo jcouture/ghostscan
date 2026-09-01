@@ -84,9 +84,9 @@ func TestScanFileFixtures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := scanFile(context.Background(), tt.path)
+			got, err := scanFileWithBinaryCheck(context.Background(), tt.path, true)
 			if err != nil {
-				t.Fatalf("scanFile() error = %v", err)
+				t.Fatalf("scanFileWithBinaryCheck() error = %v", err)
 			}
 
 			if got.InvalidUTF8 != tt.wantInvalid {
@@ -144,9 +144,9 @@ func TestScanFileInvalidUTF8(t *testing.T) {
 
 	path := writeTempFile(t, "invalid.txt", []byte{'A', 0xff, 'B', '\n'})
 
-	got, err := scanFile(context.Background(), path)
+	got, err := scanFileWithBinaryCheck(context.Background(), path, true)
 	if err != nil {
-		t.Fatalf("scanFile() error = %v", err)
+		t.Fatalf("scanFileWithBinaryCheck() error = %v", err)
 	}
 
 	if !got.InvalidUTF8 {
@@ -182,13 +182,13 @@ func TestScanFileCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := scanFile(ctx, fixturePath("clean", "ascii.txt"))
+	_, err := scanFileWithBinaryCheck(ctx, fixturePath("clean", "ascii.txt"), true)
 	if err == nil {
-		t.Fatal("scanFile() error = nil, want error")
+		t.Fatal("scanFileWithBinaryCheck() error = nil, want error")
 	}
 
 	if !strings.Contains(err.Error(), "context canceled") {
-		t.Fatalf("scanFile() error = %q, want context cancellation", err.Error())
+		t.Fatalf("scanFileWithBinaryCheck() error = %q, want context cancellation", err.Error())
 	}
 }
 

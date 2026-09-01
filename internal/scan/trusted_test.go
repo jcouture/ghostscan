@@ -47,20 +47,20 @@ func TestScanTrustedTextAllowsBinaryContent(t *testing.T) {
 		t.Fatalf("ScanTrustedTextFileDetailed() bytes = %d, want > 0", result.Bytes)
 	}
 
-	direct, err := scanTrustedTextFile(context.Background(), path)
+	direct, err := scanFileWithBinaryCheck(context.Background(), path, false)
 	if err != nil {
-		t.Fatalf("scanTrustedTextFile() error = %v", err)
+		t.Fatalf("scanFileWithBinaryCheck() error = %v", err)
 	}
 	if len(direct.Content) == 0 {
-		t.Fatal("scanTrustedTextFile() content = 0, want scanned content")
+		t.Fatal("scanFileWithBinaryCheck() content = 0, want scanned content")
 	}
 }
 
 func TestScanFileRejectsBinaryContent(t *testing.T) {
 	t.Parallel()
 
-	_, err := scanFile(context.Background(), fixturePath("binary", "contains_nul.bin"))
+	_, err := scanFileWithBinaryCheck(context.Background(), fixturePath("binary", "contains_nul.bin"), true)
 	if !errors.Is(err, ErrBinaryContent) {
-		t.Fatalf("scanFile() error = %v, want ErrBinaryContent", err)
+		t.Fatalf("scanFileWithBinaryCheck() error = %v, want ErrBinaryContent", err)
 	}
 }

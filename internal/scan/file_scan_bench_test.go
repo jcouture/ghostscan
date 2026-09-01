@@ -55,7 +55,7 @@ func BenchmarkScanFile(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				benchScanContext, benchScanErr = scanFile(ctx, tc.path)
+				benchScanContext, benchScanErr = scanFileWithBinaryCheck(ctx, tc.path, true)
 				if benchScanErr != nil {
 					b.Fatal(benchScanErr)
 				}

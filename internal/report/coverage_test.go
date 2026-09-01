@@ -416,7 +416,7 @@ func TestFormatIntDivisibleByThree(t *testing.T) {
 func TestOverlapsMultiLine(t *testing.T) {
 	t.Parallel()
 
-	// left and right are on different lines — exercises the
+	// left and right are on different lines - exercises the
 	// "left.Line != right.Line || leftEndLine != rightEndLine" true branch.
 	left := finding.Finding{Path: "f.go", Line: 1, Column: 1}
 	right := finding.Finding{Path: "f.go", Line: 5, Column: 1}

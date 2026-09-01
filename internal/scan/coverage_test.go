@@ -25,20 +25,6 @@ import (
 	"testing"
 )
 
-// --- positionForOffset edge cases ---
-
-func TestPositionForOffsetNegative(t *testing.T) {
-	t.Parallel()
-
-	content := []byte("hello\nworld\n")
-	starts := buildLineStarts(content)
-
-	line, col := positionForOffset(content, starts, -1)
-	if line != 1 || col != 1 {
-		t.Fatalf("positionForOffset(-1) = (%d, %d), want (1, 1)", line, col)
-	}
-}
-
 // --- isASCIIWhitespace ---
 
 func TestIsASCIIWhitespace(t *testing.T) {
@@ -150,41 +136,41 @@ func TestDetectStringSetTimeoutMarkersObservationMiss(t *testing.T) {
 	}
 }
 
-// --- extractQuotedSetTimeoutArgument edge cases ---
+// --- extractQuotedTimerArgument edge cases ---
 
 func TestExtractQuotedSetTimeoutArgumentLeadingWhitespace(t *testing.T) {
 	t.Parallel()
 
-	got, ok := extractQuotedSetTimeoutArgument("setTimeout(  'hello')")
+	got, ok := extractQuotedTimerArgument("setTimeout(  'hello')", "setTimeout(")
 	if !ok || got == "" {
-		t.Fatalf("extractQuotedSetTimeoutArgument(leading space) = %q, %v, want content, true", got, ok)
+		t.Fatalf("extractQuotedTimerArgument(leading space) = %q, %v, want content, true", got, ok)
 	}
 }
 
 func TestExtractQuotedSetTimeoutArgumentNewlineInString(t *testing.T) {
 	t.Parallel()
 
-	_, ok := extractQuotedSetTimeoutArgument("setTimeout('hello\nworld')")
+	_, ok := extractQuotedTimerArgument("setTimeout('hello\nworld')", "setTimeout(")
 	if ok {
-		t.Fatal("extractQuotedSetTimeoutArgument(newline in string) = ok, want false")
+		t.Fatal("extractQuotedTimerArgument(newline in string) = ok, want false")
 	}
 }
 
 func TestExtractQuotedSetTimeoutArgumentNoCloseQuote(t *testing.T) {
 	t.Parallel()
 
-	_, ok := extractQuotedSetTimeoutArgument("setTimeout('hello")
+	_, ok := extractQuotedTimerArgument("setTimeout('hello", "setTimeout(")
 	if ok {
-		t.Fatal("extractQuotedSetTimeoutArgument(no close quote) = ok, want false")
+		t.Fatal("extractQuotedTimerArgument(no close quote) = ok, want false")
 	}
 }
 
 func TestExtractQuotedSetTimeoutArgumentWhitespaceOnly(t *testing.T) {
 	t.Parallel()
 
-	_, ok := extractQuotedSetTimeoutArgument("setTimeout(   )")
+	_, ok := extractQuotedTimerArgument("setTimeout(   )", "setTimeout(")
 	if ok {
-		t.Fatal("extractQuotedSetTimeoutArgument(whitespace only) = ok, want false")
+		t.Fatal("extractQuotedTimerArgument(whitespace only) = ok, want false")
 	}
 }
 
@@ -253,7 +239,7 @@ func TestBuildFindingContextRightEllipsis(t *testing.T) {
 func TestDetectDecoderMarkersColumnTiebreaker(t *testing.T) {
 	t.Parallel()
 
-	// Two eval() on the same line — triggers the column tiebreaker in the sort.
+	// Two eval() on the same line - triggers the column tiebreaker in the sort.
 	text := "eval(a); eval(b);\n"
 	obs := buildTestObservations(text)
 	markers := detectDecoderMarkers(text, obs)

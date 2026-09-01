@@ -28,14 +28,6 @@ import (
 	"unicode/utf8"
 )
 
-func scanFile(ctx context.Context, path string) (*Context, error) {
-	return scanFileWithBinaryCheck(ctx, path, true)
-}
-
-func scanTrustedTextFile(ctx context.Context, path string) (*Context, error) {
-	return scanFileWithBinaryCheck(ctx, path, false)
-}
-
 func scanFileWithBinaryCheck(ctx context.Context, path string, checkBinary bool) (*Context, error) {
 	select {
 	case <-ctx.Done():

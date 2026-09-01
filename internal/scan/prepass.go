@@ -202,10 +202,6 @@ func detectStringTimerMarkers(text string, observations []Observation, marker st
 	return findings
 }
 
-func extractQuotedSetTimeoutArgument(text string) (string, bool) {
-	return extractQuotedTimerArgument(text, "setTimeout(")
-}
-
 func extractQuotedTimerArgument(text, marker string) (string, bool) {
 	start := len(marker)
 	for start < len(text) && isASCIIWhitespace(text[start]) {

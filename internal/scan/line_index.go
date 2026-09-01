@@ -20,11 +20,6 @@
 
 package scan
 
-import (
-	"sort"
-	"unicode/utf8"
-)
-
 func buildLineStarts(content []byte) []int {
 	lineStarts := []int{0}
 	for i, b := range content {
@@ -34,27 +29,4 @@ func buildLineStarts(content []byte) []int {
 	}
 
 	return lineStarts
-}
-
-func positionForOffset(content []byte, lineStarts []int, offset int) (int, int) {
-	if offset < 0 {
-		offset = 0
-	}
-	if offset > len(content) {
-		offset = len(content)
-	}
-
-	lineIndex := max(sort.Search(len(lineStarts), func(i int) bool {
-		return lineStarts[i] > offset
-	})-1, 0)
-
-	lineStart := lineStarts[lineIndex]
-	column := 1
-	for i := lineStart; i < offset; {
-		_, width := utf8.DecodeRune(content[i:])
-		i += width
-		column++
-	}
-
-	return lineIndex + 1, column
 }

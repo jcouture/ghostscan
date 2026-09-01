@@ -28,8 +28,8 @@ func TestSkipStatsHelpers(t *testing.T) {
 	stats := newSkipStats()
 	stats.add(EligibilityReasonEligible)
 	stats.add(EligibilityReasonBinaryNUL)
-	stats.addN(EligibilityReasonTooLarge, 2)
-	stats.addN(EligibilityReasonExcluded, 0)
+	stats.add(EligibilityReasonTooLarge)
+	stats.add(EligibilityReasonTooLarge)
 
 	if stats.ByReason[EligibilityReasonBinaryNUL] != 1 {
 		t.Fatalf("binary count = %d, want 1", stats.ByReason[EligibilityReasonBinaryNUL])
@@ -40,5 +40,5 @@ func TestSkipStatsHelpers(t *testing.T) {
 
 	var nilStats *SkipStats
 	nilStats.add(EligibilityReasonBinaryNUL)
-	nilStats.addN(EligibilityReasonTooLarge, 3)
+	nilStats.add(EligibilityReasonTooLarge)
 }

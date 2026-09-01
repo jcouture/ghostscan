@@ -64,44 +64,6 @@ func TestBuildLineStarts(t *testing.T) {
 	}
 }
 
-func TestPositionForOffset(t *testing.T) {
-	t.Parallel()
-
-	content := []byte("A\n世\r\nB")
-	lineStarts := buildLineStarts(content)
-
-	tests := []struct {
-		name       string
-		offset     int
-		wantLine   int
-		wantColumn int
-	}{
-		{name: "start of file", offset: 0, wantLine: 1, wantColumn: 1},
-		{name: "after lf starts line two", offset: 2, wantLine: 2, wantColumn: 1},
-		{name: "middle of multibyte rune", offset: 2, wantLine: 2, wantColumn: 1},
-		{name: "cr is its own column", offset: 5, wantLine: 2, wantColumn: 2},
-		{name: "final line", offset: 7, wantLine: 3, wantColumn: 1},
-		{name: "offset past end clamps", offset: 99, wantLine: 3, wantColumn: 2},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotLine, gotColumn := positionForOffset(content, lineStarts, tt.offset)
-			if gotLine != tt.wantLine || gotColumn != tt.wantColumn {
-				t.Fatalf(
-					"positionForOffset() = (%d, %d), want (%d, %d)",
-					gotLine,
-					gotColumn,
-					tt.wantLine,
-					tt.wantColumn,
-				)
-			}
-		})
-	}
-}
-
 func equalIntSlices(got, want []int) bool {
 	if len(got) != len(want) {
 		return false
