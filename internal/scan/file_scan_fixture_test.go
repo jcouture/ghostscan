@@ -70,9 +70,9 @@ func TestScanFileInvalidUTF8Fixtures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := scanFile(context.Background(), tt.path)
+			got, err := scanFileWithBinaryCheck(context.Background(), tt.path, true)
 			if err != nil {
-				t.Fatalf("scanFile() error = %v", err)
+				t.Fatalf("scanFileWithBinaryCheck() error = %v", err)
 			}
 
 			if !got.InvalidUTF8 {
@@ -101,9 +101,9 @@ func TestScanFileInvalidUTF8Fixtures(t *testing.T) {
 func TestScanFileCRLFFixturePositions(t *testing.T) {
 	t.Parallel()
 
-	got, err := scanFile(context.Background(), fixturePath("positions", "crlf_invisible.txt"))
+	got, err := scanFileWithBinaryCheck(context.Background(), fixturePath("positions", "crlf_invisible.txt"), true)
 	if err != nil {
-		t.Fatalf("scanFile() error = %v", err)
+		t.Fatalf("scanFileWithBinaryCheck() error = %v", err)
 	}
 
 	wantRunes := []rune{'A', '\r', '\n', '\u200B', 'B', '\r', '\n', 'π', '\uE000', '\r', '\n'}

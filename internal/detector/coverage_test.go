@@ -346,7 +346,7 @@ func TestPayloadMessageUnknownClass(t *testing.T) {
 func TestCombiningMarkDetectNoMarkInText(t *testing.T) {
 	t.Parallel()
 
-	// Pure ASCII with no combining marks — flush is called at end with tokenStart == -1
+	// Pure ASCII with no combining marks - flush is called at end with tokenStart == -1
 	file := testFileFromText("test.go", "hello world")
 	got := CombiningMark{}.Detect(file)
 	if len(got) != 0 {
@@ -447,7 +447,7 @@ func TestCorrelateFileDecoderOutOfRange(t *testing.T) {
 	}
 
 	file := testFileFromText("test.js", "x")
-	// Decoder is 100 lines away — exceeds correlationLines (20) → nearestDecoder returns ok=false
+	// Decoder is 100 lines away - exceeds correlationLines (20) → nearestDecoder returns ok=false
 	file.Prepass.DecoderMarkers = []DecoderMarker{
 		{Line: 100, Column: 1, Kind: "dynamic-exec", Evidence: "eval("},
 	}
@@ -463,7 +463,7 @@ func TestCorrelateFileDecoderOutOfRange(t *testing.T) {
 func TestCorrelateFileSortTiebreakerMessage(t *testing.T) {
 	t.Parallel()
 
-	// Two payloads at same line and column — hits the message tiebreaker in the sort.
+	// Two payloads at same line and column - hits the message tiebreaker in the sort.
 	payloads := []finding.Finding{
 		{Path: "test.js", Line: 10, Column: 1, RuleID: PayloadRuleID, Message: "payload Z"},
 		{Path: "test.js", Line: 10, Column: 1, RuleID: PayloadRuleID, Message: "payload A"},
@@ -514,7 +514,7 @@ func TestCorrelateFileSortTiebreakerColumn(t *testing.T) {
 func TestMixedScriptDetectNoTokenInText(t *testing.T) {
 	t.Parallel()
 
-	// A file with only whitespace and punctuation — no token-like runes
+	// A file with only whitespace and punctuation - no token-like runes
 	file := testFileFromText("test.go", "   !!!   ")
 	got := MixedScript{}.Detect(file)
 	if len(got) != 0 {

@@ -199,7 +199,7 @@ The current scanner behavior is intentionally narrow and real:
 
 ## Severity Levels
 
-Every finding is assigned one of four severity levels: `LOW`, `MEDIUM`, `HIGH`, or `CRITICAL`. Severity is deterministic and context-aware — the same finding in a different file shape or placement can receive a different severity.
+Every finding is assigned one of four severity levels: `LOW`, `MEDIUM`, `HIGH`, or `CRITICAL`. Severity is deterministic and context-aware - the same finding in a different file shape or placement can receive a different severity.
 
 ### The Four Levels
 
@@ -214,15 +214,15 @@ Every finding is assigned one of four severity levels: `LOW`, `MEDIUM`, `HIGH`, 
 
 Severity is derived from five inputs, all computed from file content and local context:
 
-1. **Sequence length** — how many suspicious runes appear in the finding. Isolated characters (1) are treated differently from short runs (2–5), medium runs (6–15), long runs (16–63), and very long runs (64+). Longer sequences receive higher severity regardless of context.
+1. **Sequence length** - how many suspicious runes appear in the finding. Isolated characters (1) are treated differently from short runs (2–5), medium runs (6–15), long runs (16–63), and very long runs (64+). Longer sequences receive higher severity regardless of context.
 
-2. **File shape** — the file is classified as `code_like`, `data_like`, `prose_like`, or `unknown` based on bounded content analysis (first 64 KiB / 400 non-empty lines). Code-like files with brackets, operators, and keywords produce higher severity for the same finding than prose-like files with natural language.
+2. **File shape** - the file is classified as `code_like`, `data_like`, `prose_like`, or `unknown` based on bounded content analysis (first 64 KiB / 400 non-empty lines). Code-like files with brackets, operators, and keywords produce higher severity for the same finding than prose-like files with natural language.
 
-3. **File role hints** — conservative path and filename hints distinguish locale data, ordinary test source, and build or release paths. These hints are advisory only. They never suppress bidi controls, payloads, correlations, long suspicious runs, or `testdata` and fixture inputs.
+3. **File role hints** - conservative path and filename hints distinguish locale data, ordinary test source, and build or release paths. These hints are advisory only. They never suppress bidi controls, payloads, correlations, long suspicious runs, or `testdata` and fixture inputs.
 
-4. **Finding region** — the immediate context around each finding is classified as whitespace-like, string-like, comment-like, token-like, prose-like, or unknown. An invisible character inside an identifier (`token_like`) is more severe than one inside a comment or whitespace region.
+4. **Finding region** - the immediate context around each finding is classified as whitespace-like, string-like, comment-like, token-like, prose-like, or unknown. An invisible character inside an identifier (`token_like`) is more severe than one inside a comment or whitespace region.
 
-5. **Decoder proximity** — if a decode or dynamic-execution marker (`eval(`, `Buffer.from(`, `atob(`, etc.) appears within 5 lines of a finding, severity is escalated by one level. Markers within 20 lines escalate findings that are already `HIGH`.
+5. **Decoder proximity** - if a decode or dynamic-execution marker (`eval(`, `Buffer.from(`, `atob(`, etc.) appears within 5 lines of a finding, severity is escalated by one level. Markers within 20 lines escalate findings that are already `HIGH`.
 
 ### Per-Rule Behavior
 

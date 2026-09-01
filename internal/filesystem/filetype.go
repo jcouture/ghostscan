@@ -74,13 +74,6 @@ func (s *SkipStats) add(reason EligibilityReason) {
 	s.ByReason[reason]++
 }
 
-func (s *SkipStats) addN(reason EligibilityReason, count int) {
-	if s == nil || reason == EligibilityReasonEligible || count <= 0 {
-		return
-	}
-	s.ByReason[reason] += count
-}
-
 func isSymlink(mode fs.FileMode) bool {
 	return mode&fs.ModeSymlink != 0
 }

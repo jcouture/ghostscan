@@ -192,7 +192,7 @@ func TestReadBinaryHeaderNonexistentFile(t *testing.T) {
 func TestDiscoverNonRegularNonDirectoryRoot(t *testing.T) {
 	t.Parallel()
 
-	// Use a named pipe (FIFO) as a root — it is neither a regular file nor a directory.
+	// Use a named pipe (FIFO) as a root - it is neither a regular file nor a directory.
 	dir := t.TempDir()
 	pipePath := filepath.Join(dir, "testpipe")
 	if err := os.MkdirAll(filepath.Dir(pipePath), 0o755); err != nil {
@@ -200,7 +200,7 @@ func TestDiscoverNonRegularNonDirectoryRoot(t *testing.T) {
 	}
 
 	// syscall.Mkfifo is only on Unix; use os.MkdirAll + a workaround
-	// Instead, pass an existing named-pipe via /dev/null equivalent — skip on non-Unix.
+	// Instead, pass an existing named-pipe via /dev/null equivalent - skip on non-Unix.
 	// We rely on /dev/stdin being a character device on Darwin/Linux.
 	root := "/dev/null"
 	if fi, err := os.Lstat(root); err != nil || fi.Mode().IsRegular() || fi.IsDir() {
@@ -269,7 +269,7 @@ func TestDiscoverSkippedFilesSortOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
-	// Verify skipped files are sorted — no panic
+	// Verify skipped files are sorted - no panic
 	_ = discovery.Stats.SkippedFiles
 }
 
