@@ -30,8 +30,9 @@ go.work.sum
 # Local pprof/benchstat scratch captures
 perf/
 
-# env file
+# env files
 .env
+.env.local
 
 # Cosign files
 cosign.key
