@@ -80,12 +80,12 @@ homebrew_casks:
     directory: Casks
     homepage: https://github.com/jcouture/ghostscan
     description: Static Unicode security scanner for developers and CI teams
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ghostscan"]
-          end
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/ghostscan"]
+        end
+      end
 
 dockers:
   - id: ghostscan-amd64
