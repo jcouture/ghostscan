@@ -21,6 +21,8 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - uses: jdx/mise-action@fc42bcc7ddbf51124c30f95a877a0c5168a3bfde # v5.2.1
+
       - run: make vet
 
       - run: make test
