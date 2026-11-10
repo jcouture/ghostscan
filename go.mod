@@ -8,7 +8,7 @@ require github.com/rs/zerolog v1.35.1
 
 require (
 	github.com/h2non/filetype v1.1.3
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 )
 
 require (
